@@ -986,7 +986,7 @@ if (trainingModalCloseEl){
 //     노출되므로 Cloudflare Workers 등 중계 함수를 경유한다.
 //     (키는 중계 서버에만 보관 · 설정 방법은 동봉 안내서 참고)
 
-const ROUTE_PROXY_DEFAULT = '';               // 배포 시 프록시 주소를 넣으면 자동 적용
+const ROUTE_PROXY_DEFAULT = 'https://green-voice-eae0.bleu7305.workers.dev';               // 배포 시 프록시 주소를 넣으면 자동 적용
 const ROUTE_PROXY_KEY = 'ddhz_route_proxy';   // 사용자가 화면에서 입력한 값 저장
 function routeProxyUrl(){
   try { const v = localStorage.getItem(ROUTE_PROXY_KEY); if (v) return String(v).trim(); } catch(e){}
