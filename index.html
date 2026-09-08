@@ -1153,18 +1153,21 @@ async function calcRoute(){
 
     const proxy = routeProxyUrl();
     const legs = [];
-    let real = !!proxy, warn = '';
+    let failCount = 0, lastErr = '';
 
+    // 구간마다 독립적으로 시도한다 — 특정 구간(예: 두 현장이 지나치게 가까워
+    // '출발지와 도착지가 동일합니다' 등 API가 거부하는 경우) 실패가 다른
+    // 구간까지 통째로 추정치로 되돌리지 않도록 한다.
     for (let i=0;i<oPts.length-1;i++){
       const straight = haversineKm(oPts[i], oPts[i+1]);
       let leg = null;
-      if (real){
+      if (proxy){
         try {
           leg = await fetchLegByProxy(proxy, oPts[i], oPts[i+1]);
           leg.straight = straight;
         } catch(e){
-          real = false;
-          warn = '중계 서버 호출에 실패해 직선거리 추정치로 표시합니다. (' + (e && e.message ? e.message : '원인 미상') + ')';
+          failCount++;
+          lastErr = (e && e.message) ? e.message : '원인 미상';
           leg = null;
         }
       }
@@ -1174,18 +1177,22 @@ async function calcRoute(){
       }
       legs.push(leg);
     }
-    // 실도로 조회가 중간에 실패했다면 앞 구간도 추정치 기준으로 통일
-    if (!real){
-      for (let i=0;i<legs.length;i++){
-        const est = estimateLeg(legs[i].straight);
-        legs[i] = { km: est.km, min: est.min, straight: legs[i].straight, path: null, tollFare: 0, fuelPrice: 0 };
-      }
+
+    const totalLegs = legs.length;
+    const realCount = totalLegs - failCount;
+    const real = !!proxy && realCount > 0;
+    let warn = '';
+    if (proxy && failCount > 0){
+      warn = (realCount === 0)
+        ? `중계 서버 호출에 실패해 직선거리 추정치로 표시합니다. (${lastErr})`
+        : `${failCount}개 구간은 실도로 경로를 찾지 못해 추정치로 표시했습니다. (${lastErr})`;
     }
 
     routeResult = {
       sites: ordered,
       legs: legs,
       real: real,
+      partial: real && failCount > 0,
       warn: warn,
       totalKm: legs.reduce((a,l)=>a+l.km, 0),
       totalMin: legs.reduce((a,l)=>a+l.min, 0),
@@ -1225,7 +1232,9 @@ function openRouteModal(){
   routeModalSubEl.textContent = `${r.sites.length}개 현장 · 담당자 ${managers}`;
 
   const note = r.real
-    ? `<div class="route-note ok">네이버 Directions 실시간 교통 기준 실제 도로 경로입니다. 방문 순서는 직선거리 기준으로 최적화한 뒤 구간별 실도로 소요시간을 조회했습니다.</div>`
+    ? (r.partial
+        ? `<div class="route-note ok">네이버 Directions 실시간 교통 기준 실제 도로 경로입니다. ${r.warn || ''} (해당 구간만 직선거리 추정치)</div>`
+        : `<div class="route-note ok">네이버 Directions 실시간 교통 기준 실제 도로 경로입니다. 방문 순서는 직선거리 기준으로 최적화한 뒤 구간별 실도로 소요시간을 조회했습니다.</div>`)
     : `<div class="route-note">${r.warn ? r.warn + '<br/>' : ''}<b>추정치 표시 중</b> — 직선거리에 도로 우회계수 1.3배와 구간별 평균속도(시내 25 · 근교 45 · 시외 65km/h)를 적용한 값입니다. 실제 도로·교통 기준 값을 보려면 아래에 중계 서버 주소를 등록해 주세요.</div>`;
 
   let cum = 0;
