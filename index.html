@@ -201,6 +201,8 @@
   /* 모바일 순회 선택 모드 전용 UI(접이식 필터·하단 고정 액션바·지도 위 플로팅바).
      데스크톱에서는 기존 화면 그대로 두고 항상 숨긴다. */
   #filter-toggle{display:none;}
+  /* 순회 설정 접기 토글은 모바일 전용(데스크톱은 항상 펼친 상태) */
+  #route-tools-toggle{display:none;}
   #route-bottom-bar{display:none;}
   #route-float-bar{display:none;}
 
@@ -271,7 +273,14 @@
   .site-item.rt-on .meta-name{color:#8f0000;}
   #route-select-all{flex:1;}
   /* 방문 순번 배지 + 현장명 라벨(지도 위에 이름을 함께 표시) */
+  /* 배지+라벨 묶음의 클릭 처리
+     · 묶음/라벨: 클릭 통과 — 라벨은 폭이 넓어 지도 드래그를 막으면 안 된다
+     · 선택 배지(.nv-marker-sel): 클릭 허용 — 다시 눌러 선택을 해제해야 한다
+       (라벨 추가 시 묶음 전체에 pointer-events:none 을 걸어 재탭이 막혔던 문제)
+     · 경로 결과 배지(.rt-pin-static): 조작 대상이 아니므로 전체 통과 */
   .rt-pin{display:flex;align-items:center;white-space:nowrap;pointer-events:none;}
+  .rt-pin > .nv-marker-sel{pointer-events:auto;cursor:pointer;}
+  .rt-pin-static > *{pointer-events:none;}
   .rt-label{
     margin-left:5px;
     padding:3px 7px;
@@ -620,10 +629,51 @@
        목록이 차지할 수 있는 공간을 최대한 늘린다. */
     body.route-active header .stat-row{display:none;}
     body.route-active footer{display:none;}
+    /* 순회모드에서는 제목을 한 줄로 줄여 목록 공간을 더 확보한다 */
+    body.route-active header{padding:8px 14px;}
+    body.route-active header .title-block h1{
+      font-size:13px;margin:0;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    }
     body.route-active #route-sel-count,
     body.route-active #route-calc-row,
     body.route-active #route-hint{display:none;}
     body.route-active #route-panel{padding:8px 10px;gap:6px;}
+
+    /* ── 순회모드에서 목록이 보일 공간을 최대한 확보한다 ──
+       상단 컨트롤이 화면을 다 차지해 현장이 한두 개만 보이던 문제 대응 */
+    /* 1) 순회 설정(담당자 묶기·전체선택·출발지)을 접을 수 있게 한다 */
+    #route-tools-toggle{
+      display:flex;align-items:center;justify-content:space-between;gap:8px;
+      width:100%;padding:8px 10px;
+      background:var(--surface-alt);border:1px solid var(--border);border-radius:8px;
+      font-size:12px;font-weight:700;color:var(--ink-secondary);
+      cursor:pointer;-webkit-tap-highlight-color:transparent;text-align:left;
+    }
+    #route-tools-toggle #route-tools-summary{
+      flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    }
+    #route-tools-toggle .chev{flex:none;color:var(--ink-muted);font-size:10px;transition:transform .2s ease;}
+    #route-tools-toggle.open .chev{transform:rotate(180deg);}
+    #route-tools{display:flex;flex-direction:column;gap:8px;}
+    #route-tools.collapsed{display:none;}
+    /* 2) 순회모드에서 [순회경로 계획 종료] 버튼과 목록 건수 줄을 컴팩트하게 */
+    body.route-active #route-toggle{padding:8px 10px;font-size:12px;}
+    body.route-active #site-count{display:none;}   /* 건수는 시트 손잡이에 이미 표시됨 */
+    /* 3) 순회모드 목록 항목을 2줄로 압축해 한 화면에 더 많은 현장명이 보이게 한다
+          (직종별 인원 줄은 숨기고, 원청사·담당자는 한 줄 말줄임으로 표시) */
+    body.route-active .site-item{padding:7px 4px;gap:7px;}
+    body.route-active .site-item .meta-count{display:none;}
+    body.route-active .site-item .meta-name{
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal;
+    }
+    body.route-active .site-item .meta-sub{
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      font-size:11px;margin-top:0;
+    }
+    /* 4) 컨트롤이 눌려 찌그러지지 않게 고정하고, 남은 공간은 모두 목록에 준다 */
+    body.route-active #sidebar > *{flex:none;}
+    body.route-active #site-list{flex:1 1 auto;min-height:140px;-webkit-overflow-scrolling:touch;}
 
     /* 시트를 접어 지도 위에서 마커를 직접 눌러 선택할 때도
        선택 현황과 경로 계산 버튼을 놓치지 않도록 지도 위에 띄운다. */
@@ -735,6 +785,11 @@
         <button class="btn" id="route-toggle">순회경로 계획</button>
       </div>
       <div id="route-panel" class="hidden">
+        <button id="route-tools-toggle">
+          <span id="route-tools-summary">순회 설정 (담당자 묶기 · 출발지)</span>
+          <span class="chev">▼</span>
+        </button>
+        <div id="route-tools">
         <div class="rp-row">
           <select id="route-manager"><option value="">담당자별 자동 묶기…</option></select>
         </div>
@@ -751,6 +806,7 @@
           </div>
           <div id="route-start-state">주소를 입력하고 [적용]을 누르면 그 지점에서 출발하는 경로로 계산됩니다. <b>건물번호까지</b> 입력해야 위치를 찾을 수 있습니다.</div>
         </div>
+        </div><!-- /#route-tools -->
         <div id="route-sel-count">선택된 현장 0곳</div>
         <div class="rp-row" id="route-calc-row">
           <button class="btn btn-primary route-calc-btn" id="route-calc">경로 계산</button>
@@ -1258,7 +1314,7 @@ function drawRouteOnMap(result){
         position: new naver.maps.LatLng(pts[i].lat, pts[i].lon),
         zIndex: st ? 320 : 300,
         icon: {
-          content: `<div class="rt-pin"><div class="rt-badge${st?' rt-badge-start':''}">`
+          content: `<div class="rt-pin rt-pin-static"><div class="rt-badge${st?' rt-badge-start':''}">`
                  + `${routeOrdLabel(result, i)}</div>`
                  + `<div class="rt-label${st?' rt-label-start':''}">${escHtml(s.site)}</div></div>`,
           anchor: new naver.maps.Point(10, 10)
@@ -1378,7 +1434,7 @@ function showRouteStartMarker(){
       position: new naver.maps.LatLng(routeStart.lat, routeStart.lon),
       zIndex: 320,
       icon: {
-        content: `<div class="rt-pin"><div class="rt-badge rt-badge-start">S</div>`
+        content: `<div class="rt-pin rt-pin-static"><div class="rt-badge rt-badge-start">S</div>`
                + `<div class="rt-label rt-label-start">출발지</div></div>`,
         anchor: new naver.maps.Point(10, 10)
       }
@@ -1733,6 +1789,11 @@ function setRouteMode(on){
     if (sidebarEl) sidebarEl.classList.toggle('expanded', on);
     if (filterGroupEl) filterGroupEl.classList.toggle('collapsed', on);
     if (filterToggleEl) filterToggleEl.classList.remove('open');
+    // 순회 설정은 기본으로 접어 현장 목록이 최대한 많이 보이게 한다.
+    if (typeof setRouteToolsOpen === 'function'){
+      setRouteToolsOpen(!on);
+      if (typeof updateRouteToolsSummary === 'function') updateRouteToolsSummary();
+    }
   }
   showRouteStartMarker();   // 순회모드일 때만 출발지 마커를 띄운다
   if (on && typeof renderRouteStart === 'function') renderRouteStart();
@@ -1762,6 +1823,8 @@ if (routeManagerSel){
     renderList();
     updateRouteSelUi();
     refreshAllMarkerIcons();
+    if (typeof updateRouteToolsSummary === 'function') updateRouteToolsSummary();
+    if (isMobileLayout() && typeof setRouteToolsOpen === 'function') setRouteToolsOpen(false);
   });
 }
 ['route-calc', 'route-calc-m', 'route-calc-f'].forEach(id=>{
@@ -1834,6 +1897,34 @@ if (routePlanLabelsBtn){
 if (routePlanDetailBtn){
   routePlanDetailBtn.addEventListener('click', ()=>{ if (routeResult) openRouteModal(); });
 }
+// ---- 모바일: 순회 설정 접기 ----
+// 상단 컨트롤이 시트를 다 차지해 현장 목록이 한두 개만 보이던 문제 대응.
+// 담당자 묶기·전체선택·출발지는 처음 한 번만 쓰는 항목이라 기본은 접어둔다.
+const routeToolsToggleEl = document.getElementById('route-tools-toggle');
+const routeToolsEl = document.getElementById('route-tools');
+const routeToolsSummaryEl = document.getElementById('route-tools-summary');
+
+function updateRouteToolsSummary(){
+  if (!routeToolsSummaryEl) return;
+  const parts = [];
+  const m = routeManagerSel ? routeManagerSel.value : '';
+  if (m) parts.push(`담당자 ${m}`);
+  if (routeStart) parts.push(`출발지 ${routeStart.label || routeStart.addr}`);
+  routeToolsSummaryEl.textContent = parts.length
+    ? `순회 설정 · ${parts.join(' · ')}`
+    : '순회 설정 (담당자 묶기 · 출발지)';
+}
+function setRouteToolsOpen(open){
+  if (!routeToolsEl || !routeToolsToggleEl) return;
+  routeToolsEl.classList.toggle('collapsed', !open);
+  routeToolsToggleEl.classList.toggle('open', open);
+}
+if (routeToolsToggleEl){
+  routeToolsToggleEl.addEventListener('click', ()=>{
+    setRouteToolsOpen(routeToolsEl.classList.contains('collapsed'));
+  });
+}
+
 // ---- 출발지 입력 UI ----
 const routeStartInput = document.getElementById('route-start-input');
 const routeStartApplyBtn = document.getElementById('route-start-apply');
@@ -1862,6 +1953,7 @@ function renderRouteStart(){
     resetStartState();
   }
   showRouteStartMarker();
+  if (typeof updateRouteToolsSummary === 'function') updateRouteToolsSummary();
   updateRouteSelUi();
 }
 async function applyRouteStart(){
@@ -1902,6 +1994,8 @@ async function applyRouteStart(){
       // 선택 변경과 마찬가지로 이전 계산 결과는 무효가 된다.
       if (routeResult){ clearRouteOverlay(); routeResult = null; hideRoutePlanBar(); }
       renderRouteStart();
+      // 출발지 지정이 끝나면 설정을 접어 목록 공간을 되돌려 준다.
+      if (isMobileLayout()) setRouteToolsOpen(false);
       if (map){
         try { map.setCenter(new naver.maps.LatLng(y, x)); if (map.getZoom() < 12) map.setZoom(13); } catch(e){}
       }
