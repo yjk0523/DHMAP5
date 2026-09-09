@@ -407,6 +407,24 @@
   }
   .worker-table td{padding:7px 6px;border-bottom:1px solid var(--surface-alt);color:var(--ink-primary);}
   .worker-table tr:hover td{background:var(--surface-alt);}
+  /* 현장 정보 모달 본문 */
+  .si-addr-lbl{
+    font-size:11px;font-weight:700;color:var(--ink-muted);
+    margin:12px 0 4px 0;
+  }
+  .si-addr{
+    font-size:13px;color:var(--ink-primary);line-height:1.6;
+    word-break:break-all;
+    background:var(--surface-alt);border:1px solid var(--border);
+    border-radius:6px;padding:8px 10px;
+  }
+  .si-row{
+    display:flex;justify-content:space-between;gap:12px;
+    padding:9px 4px;border-bottom:1px solid var(--surface-alt);
+    font-size:13px;color:var(--ink-secondary);
+  }
+  .si-row:last-child{border-bottom:none;}
+  .si-row b{color:var(--ink-primary);}
   .worker-empty{color:var(--ink-secondary);font-size:13px;text-align:center;padding:28px 10px;line-height:1.7;}
   /* 교육수료현황 가로 막대그래프 */
   .tr-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f3f5f7;}
@@ -589,11 +607,6 @@
       font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
     }
     .stat-tile-wide .addr{display:none;}
-    /* [정보]를 눌러 상세를 볼 때는 주소도 한 줄로 표시한다 */
-    body.info-view .stat-tile-wide .addr{
-      display:block;font-size:10px;margin-top:1px;
-      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-    }
     .stat-tile-action{padding:6px 9px;}
     .stat-tile-action .lbl{font-size:12px;white-space:nowrap;}
     .stat-tile-clear{padding:6px 10px;flex:0 0 auto;}
@@ -909,6 +922,19 @@
     <span>자료: 대덕휴비즈 현장관리 마스터(2026-08) · 좌표는 네이버 지오코딩 결과 및 시/군/구 행정구역 중심 좌표로 표기됨 · 비고에 [삭제후보] 표기된 현장 및 6대 직종 인원이 모두 0인 현장은 제외</span>
     <span id="gen-date"></span>
   </footer>
+  <div id="site-info-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" id="site-info-modal-site"></div>
+          <div class="modal-sub" id="site-info-modal-sub"></div>
+        </div>
+        <button class="modal-close" id="site-info-modal-close" aria-label="닫기">✕</button>
+      </div>
+      <div class="modal-body" id="site-info-modal-body"></div>
+    </div>
+  </div>
+
   <div id="worker-modal" class="modal-overlay hidden">
     <div class="modal-card">
       <div class="modal-header">
@@ -1002,25 +1028,7 @@ function chartInnerHtml(bars, legend){
 }
 
 function renderStats(){
-  document.body.classList.toggle('info-view', !!(selectedSite && selectedView === 'info'));
-  if (selectedSite && selectedView === 'info'){
-    const s = selectedSite;
-    const rows = CATS.map(c=> (s[c.key]||0)>0 ? `<div class="detail-row"><span>${c.label}</span><b>${s[c.key]}명</b></div>` : '').join('');
-    statRowEl.innerHTML = `
-      <div class="stat-tile stat-tile-wide" title="${s.site}"><div class="num">${s.site}</div><div class="addr">${s.addr || '주소 정보 없음'}</div></div>
-      <div class="stat-tile"><div class="num">${siteTotal(s)}</div><div class="lbl">배치 인원(명)</div></div>
-      <div class="stat-tile stat-tile-detail">${rows}</div>
-      <div class="stat-tile stat-tile-clear" id="back-to-buttons"><div class="num">←</div><div class="lbl">뒤로</div></div>
-      <div class="stat-tile stat-tile-clear" id="clear-selection"><div class="num">✕</div><div class="lbl">전체 보기</div></div>
-    `;
-    document.getElementById('back-to-buttons').addEventListener('click', ()=>{
-      selectedView = null;
-      renderStats();
-    });
-    document.getElementById('clear-selection').addEventListener('click', ()=>{
-      clearSelection();
-    });
-  } else if (selectedSite){
+  if (selectedSite){
     const s = selectedSite;
     statRowEl.innerHTML = `
       <div class="stat-tile stat-tile-wide" title="${s.site}"><div class="num">${s.site}</div></div>
@@ -1030,8 +1038,7 @@ function renderStats(){
       <div class="stat-tile stat-tile-clear" id="clear-selection"><div class="num">✕</div><div class="lbl">전체 보기</div></div>
     `;
     document.getElementById('btn-site-info').addEventListener('click', ()=>{
-      selectedView = 'info';
-      renderStats();
+      openSiteInfoModal(s);
     });
     document.getElementById('btn-worker-info').addEventListener('click', ()=>{
       openWorkerModal(s);
@@ -1095,6 +1102,7 @@ function clearSelection(){
   renderStats();
   highlightListItem(null);
   refreshAllMarkerIcons();
+  closeSiteInfoModal();
   closeWorkerModal();
   closeTrainingModal();
 }
@@ -1135,6 +1143,27 @@ function workerBodyHtml(s){
         이 현장은 근로자 명단 자료에서 명단을 확인할 수 없습니다.<br/>
         (자료 기준일과 현장 목록 갱신 시점의 차이, 또는 현장명 표기 차이로 일부 현장은 매칭되지 않을 수 있습니다.)
       </div>`;
+}
+
+// ---- 현장 정보 모달 ----
+// 상단 한 줄에서는 주소·직종별 인원이 잘려 보이므로 근로자/교육과 같이 팝업으로 표시한다.
+const siteInfoModalEl = document.getElementById('site-info-modal');
+const siteInfoModalSiteEl = document.getElementById('site-info-modal-site');
+const siteInfoModalSubEl = document.getElementById('site-info-modal-sub');
+const siteInfoModalBodyEl = document.getElementById('site-info-modal-body');
+const siteInfoModalCloseEl = document.getElementById('site-info-modal-close');
+
+function openSiteInfoModal(s){
+  siteInfoModalSiteEl.textContent = s.site;
+  siteInfoModalSubEl.textContent = `${s.client} · 담당 ${s.manager}`;
+  siteInfoModalBodyEl.innerHTML = siteInfoBodyHtml(s);
+  siteInfoModalEl.classList.remove('hidden');
+}
+function closeSiteInfoModal(){ siteInfoModalEl.classList.add('hidden'); }
+if (siteInfoModalCloseEl){
+  siteInfoModalCloseEl.addEventListener('click', closeSiteInfoModal);
+  siteInfoModalEl.addEventListener('click', (e)=>{ if (e.target === siteInfoModalEl) closeSiteInfoModal(); });
+  document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') closeSiteInfoModal(); });
 }
 
 function openWorkerModal(s){
@@ -1203,9 +1232,12 @@ function trainingBodyHtml(s){
 // 현장 정보(주소·직종별 인원) 본문 HTML
 function siteInfoBodyHtml(s){
   const rows = CATS.map(c=> (s[c.key]||0)>0
-    ? `<div class="detail-row"><span>${c.label}</span><b>${s[c.key]}명</b></div>` : '').join('');
+    ? `<div class="si-row"><span>${c.label}</span><b>${s[c.key]}명</b></div>` : '').join('');
   return `
-    <div class="sc-addr">${escHtml(s.addr || '주소 정보 없음')}</div>
+    <div class="worker-meta">배치 인원 총 ${siteTotal(s)}명</div>
+    <div class="si-addr-lbl">주소</div>
+    <div class="si-addr">${escHtml(s.addr || '주소 정보 없음')}</div>
+    <div class="si-addr-lbl">직종별 배치 인원</div>
     ${rows || '<div class="worker-empty">직종별 배치 인원 정보가 없습니다.</div>'}`;
 }
 
