@@ -737,11 +737,11 @@
         <div id="route-start-box">
           <span class="rs-lbl">출발지 (선택 · 미입력 시 첫 현장에서 시작)</span>
           <div id="route-start-row">
-            <input id="route-start-input" type="text" placeholder="예) 대전 유성구 테크노4로 17" />
+            <input id="route-start-input" type="text" placeholder="예) 서울 서초구 남부순환로 2557" />
             <button class="btn" id="route-start-apply">적용</button>
             <button class="btn" id="route-start-clear">해제</button>
           </div>
-          <div id="route-start-state">주소를 입력하고 [적용]을 누르면 그 지점에서 출발하는 경로로 계산됩니다.</div>
+          <div id="route-start-state">주소를 입력하고 [적용]을 누르면 그 지점에서 출발하는 경로로 계산됩니다. <b>건물번호까지</b> 입력해야 위치를 찾을 수 있습니다.</div>
         </div>
         <div id="route-sel-count">선택된 현장 0곳</div>
         <div class="rp-row" id="route-calc-row">
@@ -1801,31 +1801,48 @@ const routeStartInput = document.getElementById('route-start-input');
 const routeStartApplyBtn = document.getElementById('route-start-apply');
 const routeStartClearBtn = document.getElementById('route-start-clear');
 const routeStartStateEl = document.getElementById('route-start-state');
-const ROUTE_START_HELP = routeStartStateEl ? routeStartStateEl.textContent : '';
+// 기본 안내문은 서식(굵게)이 있으므로 HTML로 보관해 두고 그대로 되돌린다.
+const ROUTE_START_HELP_HTML = routeStartStateEl ? routeStartStateEl.innerHTML : '';
 
+// msg 에는 사용자 입력 주소가 섞일 수 있으므로 반드시 textContent 로 넣는다.
 function setStartState(msg, kind){
   if (!routeStartStateEl) return;
   routeStartStateEl.textContent = msg;
   routeStartStateEl.classList.remove('ok','warn');
   if (kind) routeStartStateEl.classList.add(kind);
 }
+function resetStartState(){
+  if (!routeStartStateEl) return;
+  routeStartStateEl.innerHTML = ROUTE_START_HELP_HTML;
+  routeStartStateEl.classList.remove('ok','warn');
+}
 function renderRouteStart(){
   if (routeStart){
     if (routeStartInput) routeStartInput.value = routeStart.addr || '';
     setStartState(`출발지 지정됨 — ${routeStart.label || routeStart.addr}`, 'ok');
   } else {
-    setStartState(ROUTE_START_HELP, null);
+    resetStartState();
   }
   showRouteStartMarker();
   updateRouteSelUi();
 }
-function applyRouteStart(){
+async function applyRouteStart(){
   const q = (routeStartInput ? routeStartInput.value : '').trim();
   if (!q){ setStartState('출발지 주소를 입력해 주세요.', 'warn'); return; }
-  if (!(window.naver && naver.maps && naver.maps.Service && naver.maps.Service.geocode)){
-    setStartState('지도가 아직 준비되지 않았습니다. 잠시 후 다시 눌러 주세요.', 'warn');
-    return;
+
+  // 지오코더는 지도 로딩 직후 약 1초(모바일은 수 초) 뒤에 준비된다.
+  // 곧바로 실패 처리하지 않고 준비될 때까지 기다린다.
+  if (!geocoderReady()){
+    setStartState('주소 검색 기능을 불러오는 중입니다…', null);
+    if (routeStartApplyBtn) routeStartApplyBtn.disabled = true;
+    const ok = await ensureGeocoder(15000);
+    if (routeStartApplyBtn) routeStartApplyBtn.disabled = false;
+    if (!ok){
+      setStartState('주소 검색 기능을 불러오지 못했습니다. 네트워크 상태를 확인한 뒤 페이지를 새로고침해 주세요.', 'warn');
+      return;
+    }
   }
+
   setStartState('주소를 조회하는 중…', null);
   try {
     naver.maps.Service.geocode({ query: q }, function(status, response){
@@ -1833,7 +1850,13 @@ function applyRouteStart(){
         ? response.v2.addresses[0] : null;
       const y = a ? parseFloat(a.y) : NaN, x = a ? parseFloat(a.x) : NaN;
       if (!a || !isFinite(y) || !isFinite(x)){
-        setStartState('주소를 찾지 못했습니다. 도로명 또는 지번 주소를 다시 확인해 주세요.', 'warn');
+        // 실측: 도로명만(예: "서초구 남부순환로") 입력하면 결과 0건.
+        // 건물번호나 지번까지 있어야 좌표가 나오므로 그 점을 안내한다.
+        const hasNo = /\d/.test(q);
+        setStartState(hasNo
+          ? '주소를 찾지 못했습니다. 오타나 행정구역명을 다시 확인해 주세요. (예: 서울 서초구 남부순환로 2557)'
+          : '건물번호까지 입력해 주세요. 도로명만으로는 위치를 찾을 수 없습니다. (예: 서울 서초구 남부순환로 2557)',
+          'warn');
         return;
       }
       routeStart = { addr: q, label: a.roadAddress || a.jibunAddress || q, lat: y, lon: x };
@@ -2060,14 +2083,43 @@ function initNaverMap(){
 // · 결과는 localStorage에 캐시 → 다음 로딩부터는 즉시 정밀 표시
 // · 지오코더 미탑재/변환 실패 시 근사 좌표를 그대로 유지(안전)
 const GEO_CACHE_KEY = 'ddhz_geocode_v2';  // v1의 정제 전 주소 캐시와 섞이지 않도록 키 버전 올림
-// [수정] geocoder 서브모듈은 maps.js 의 onload 이후에 별도로 로드되므로,
-// 준비될 때까지 재시도해야 한다. (기존 코드는 준비 전에 1회 호출 후 조용히 종료되어
-// 지오코딩이 전혀 실행되지 않았고, 모든 마커가 시/군/구 중심 근사좌표에 머물렀다.)
-let _geoWait = 0;
-function geocodeAndPlace(){
-  if (!(window.naver && naver.maps && naver.maps.Service && naver.maps.Service.geocode)){
-    if (_geoWait++ < 40){ setTimeout(geocodeAndPlace, 250); }   // 최대 10초 대기
-    else { console.warn('[지오코딩] geocoder 서브모듈 로드 실패 - 내장 좌표를 사용합니다.'); }
+// geocoder 서브모듈(maps-geocoder.js)은 maps.js 의 onload 이후에 별도로 내려온다.
+// 실측: maps.js onload 64ms → naver.maps.Service 준비 740ms (약 0.7초 지연, 모바일은 더 김)
+// 따라서 준비 여부를 즉시 판정하면 안 되고, 준비될 때까지 기다려야 한다.
+function geocoderReady(){
+  return !!(window.naver && naver.maps && naver.maps.Service && naver.maps.Service.geocode);
+}
+// 지오코더가 준비될 때까지 대기한다. 절반 시점까지 준비되지 않으면
+// maps.js 를 서브모듈과 함께 한 번 더 불러 복구를 시도한다.
+function ensureGeocoder(timeoutMs){
+  return new Promise(function(resolve){
+    if (geocoderReady()) return resolve(true);
+    const limit = timeoutMs || 12000;
+    const t0 = Date.now();
+    let reinjected = false;
+    const iv = setInterval(function(){
+      if (geocoderReady()){ clearInterval(iv); resolve(true); return; }
+      const el = Date.now() - t0;
+      const cid = (typeof _nvClientId !== 'undefined' && _nvClientId) ? _nvClientId : null;
+      if (!reinjected && el > limit/2 && cid){
+        reinjected = true;
+        try {
+          const sc = document.createElement('script');
+          sc.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(cid)}`
+                 + `&submodules=geocoder&_retry=${Date.now()}`;
+          document.head.appendChild(sc);
+          console.warn('[지오코딩] geocoder 서브모듈 로드가 늦어 재시도합니다.');
+        } catch(e){}
+      }
+      if (el > limit){ clearInterval(iv); resolve(false); }
+    }, 150);
+  });
+}
+
+async function geocodeAndPlace(){
+  const geoOk = await ensureGeocoder(15000);
+  if (!geoOk){
+    console.warn('[지오코딩] geocoder 서브모듈을 불러오지 못했습니다 - 내장 좌표를 사용합니다.');
     return;
   }
   let cache = {};
