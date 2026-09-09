@@ -177,6 +177,24 @@
   .rp-row{display:flex;gap:6px;align-items:center;}
   .rp-row > select{flex:1;min-width:0;}
   .rp-row > .btn{flex:1;}
+  /* 출발지 입력: 주소를 지오코딩해 순회경로의 시작점으로 고정한다. */
+  #route-start-box{border-top:1px solid var(--border);padding-top:9px;margin-top:2px;}
+  #route-start-box .rs-lbl{
+    font-size:11px;font-weight:700;color:var(--ink-secondary);
+    display:block;margin-bottom:5px;
+  }
+  #route-start-row{display:flex;gap:6px;align-items:center;}
+  #route-start-row > input{flex:1;min-width:0;}
+  #route-start-row > .btn{flex:none;padding:8px 11px;font-size:11.5px;}
+  #route-start-state{
+    font-size:10.5px;line-height:1.5;margin-top:5px;
+    color:var(--ink-muted);word-break:break-all;
+  }
+  #route-start-state.ok{color:#1c6b3c;font-weight:600;}
+  #route-start-state.warn{color:#8f0000;font-weight:600;}
+  .rt-badge-start{background:#1f4e79 !important;}
+  .rt-label-start{border-color:#1f4e79 !important;color:#123a5c !important;}
+  #route-plan-bar .pb-ord.is-start{background:#1f4e79;}
   #route-sel-count{font-size:11.5px;color:var(--ink-secondary);font-weight:600;}
   #route-hint{font-size:10.5px;color:var(--ink-muted);line-height:1.5;}
   #route-hint.warn{color:#8f0000;font-weight:600;}
@@ -185,6 +203,55 @@
   #filter-toggle{display:none;}
   #route-bottom-bar{display:none;}
   #route-float-bar{display:none;}
+
+  /* 계산 완료된 순회경로의 방문 순서·현장명을 지도 위에 계속 띄워
+     결과창을 닫아도 어느 현장이 몇 번째인지 확인할 수 있게 한다. */
+  #route-plan-bar{
+    display:none;
+    position:absolute;
+    left:14px;bottom:14px;
+    width:290px;max-width:calc(100% - 28px);
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:12px;
+    box-shadow:0 6px 20px rgba(0,0,0,0.2);
+    z-index:560;
+    overflow:hidden;
+  }
+  #route-plan-bar.show{display:block;}
+  #route-plan-bar .pb-head{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:9px 10px 9px 12px;
+    border-bottom:1px solid var(--border);
+    background:var(--surface-alt);
+  }
+  #route-plan-bar .pb-title{font-size:12px;font-weight:700;color:var(--ink-primary);line-height:1.35;}
+  #route-plan-bar .pb-title small{display:block;font-size:10.5px;font-weight:600;color:var(--ink-muted);margin-top:1px;}
+  #route-plan-bar .pb-acts{display:flex;gap:5px;flex:none;}
+  #route-plan-bar .pb-acts .btn{padding:5px 8px;font-size:11px;}
+  #route-plan-bar .pb-acts .btn.on{background:#C00000;border-color:#C00000;color:#fff;}
+  #route-plan-bar .pb-list{max-height:210px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  #route-plan-bar.collapsed .pb-list{display:none;}
+  #route-plan-bar .pb-chev{transition:transform 0.2s ease;display:inline-block;}
+  #route-plan-bar.collapsed .pb-chev{transform:rotate(180deg);}
+  #route-plan-bar .pb-item{
+    display:flex;align-items:flex-start;gap:8px;
+    padding:7px 10px 7px 12px;
+    border-bottom:1px solid var(--surface-alt);
+    font-size:12px;line-height:1.35;
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+  }
+  #route-plan-bar .pb-item:last-child{border-bottom:none;}
+  #route-plan-bar .pb-item:hover{background:var(--surface-alt);}
+  #route-plan-bar .pb-ord{
+    flex:none;width:18px;height:18px;line-height:17px;text-align:center;
+    border-radius:50%;background:#C00000;color:#fff;
+    font-size:10.5px;font-weight:700;margin-top:1px;
+  }
+  #route-plan-bar .pb-txt{flex:1;min-width:0;}
+  #route-plan-bar .pb-name{display:block;font-weight:600;color:var(--ink-primary);word-break:break-all;}
+  #route-plan-bar .pb-sub{display:block;font-size:10.5px;color:var(--ink-muted);margin-top:1px;}
   /* 순회 선택 모드: 체크박스가 들어가도 현장명이 눌리지 않도록
      텍스트 영역에 flex:1 · min-width:0 을 주고, 선택 상태는 배경색과
      좌측 굵은 선으로 한눈에 구분되게 한다. */
@@ -203,6 +270,21 @@
   }
   .site-item.rt-on .meta-name{color:#8f0000;}
   #route-select-all{flex:1;}
+  /* 방문 순번 배지 + 현장명 라벨(지도 위에 이름을 함께 표시) */
+  .rt-pin{display:flex;align-items:center;white-space:nowrap;pointer-events:none;}
+  .rt-label{
+    margin-left:5px;
+    padding:3px 7px;
+    border-radius:6px;
+    background:rgba(255,255,255,0.94);
+    border:1px solid #C00000;
+    color:#6d0000;
+    font-size:11px;font-weight:700;line-height:1.25;
+    box-shadow:0 1px 4px rgba(0,0,0,0.22);
+    font-family:"Malgun Gothic",sans-serif;
+    max-width:150px;overflow:hidden;text-overflow:ellipsis;
+  }
+  body.rt-labels-off .rt-label{display:none;}
   .rt-badge{
     width:20px;height:20px;line-height:19px;
     border-radius:50%;
@@ -212,6 +294,7 @@
     border:1.5px solid #fff;
     box-shadow:0 0 0 1px rgba(0,0,0,0.25);
     font-family:"Malgun Gothic",sans-serif;
+    flex:none;
   }
   .route-summary{
     display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;
@@ -544,9 +627,11 @@
 
     /* 시트를 접어 지도 위에서 마커를 직접 눌러 선택할 때도
        선택 현황과 경로 계산 버튼을 놓치지 않도록 지도 위에 띄운다. */
+    /* [수정] 접힌 시트의 손잡이(현장 목록)가 화면 하단 46px를 차지하므로
+       플로팅바를 그 위로 올려 겹치지 않게 한다. */
     #route-float-bar{
       position:absolute;
-      left:12px;right:12px;bottom:calc(14px + env(safe-area-inset-bottom,0px));
+      left:12px;right:12px;bottom:calc(56px + env(safe-area-inset-bottom,0px));
       align-items:center;
       justify-content:space-between;
       gap:10px;
@@ -558,6 +643,16 @@
       z-index:550;
     }
     #route-float-bar.show{display:flex;}
+    /* 경로 계산 결과바가 떠 있을 때는 선택 플로팅바를 감춰 겹침을 막는다. */
+    body.rt-planned #route-float-bar.show{display:none;}
+
+    #route-plan-bar{
+      left:12px;right:12px;width:auto;max-width:none;
+      bottom:calc(56px + env(safe-area-inset-bottom,0px));
+    }
+    /* 모바일에서는 지도가 가려지지 않도록 목록 높이를 낮게 제한한다. */
+    #route-plan-bar .pb-list{max-height:150px;}
+
     #route-float-bar .cnt{font-size:11.5px;font-weight:700;color:var(--ink-primary);line-height:1.4;}
     #route-float-bar .cnt small{display:block;font-size:10px;font-weight:500;color:var(--ink-muted);}
     #route-float-bar .actions{display:flex;gap:6px;flex:none;}
@@ -639,6 +734,15 @@
           <button class="btn" id="route-select-all">목록 전체 선택</button>
           <button class="btn" id="route-reset">선택 해제</button>
         </div>
+        <div id="route-start-box">
+          <span class="rs-lbl">출발지 (선택 · 미입력 시 첫 현장에서 시작)</span>
+          <div id="route-start-row">
+            <input id="route-start-input" type="text" placeholder="예) 대전 유성구 테크노4로 17" />
+            <button class="btn" id="route-start-apply">적용</button>
+            <button class="btn" id="route-start-clear">해제</button>
+          </div>
+          <div id="route-start-state">주소를 입력하고 [적용]을 누르면 그 지점에서 출발하는 경로로 계산됩니다.</div>
+        </div>
         <div id="route-sel-count">선택된 현장 0곳</div>
         <div class="rp-row" id="route-calc-row">
           <button class="btn btn-primary route-calc-btn" id="route-calc">경로 계산</button>
@@ -659,6 +763,18 @@
           <button class="btn" id="route-open-list">목록 열기</button>
           <button class="btn btn-primary route-calc-btn" id="route-calc-f">경로 계산</button>
         </span>
+      </div>
+      <div id="route-plan-bar">
+        <div class="pb-head">
+          <span class="pb-title" id="route-plan-title">순회경로</span>
+          <span class="pb-acts">
+            <button class="btn" id="route-plan-labels" title="지도 위 현장명 표시/숨기기">이름</button>
+            <button class="btn" id="route-plan-detail">상세</button>
+            <button class="btn" id="route-plan-fold" title="목록 접기/펼치기"><span class="pb-chev">▲</span></button>
+            <button class="btn" id="route-plan-close" title="경로 지우기">✕</button>
+          </span>
+        </div>
+        <div class="pb-list" id="route-plan-list"></div>
       </div>
       <div id="key-gate">
         <div class="card">
@@ -1103,6 +1219,8 @@ function clearRouteOverlay(){
 }
 function drawRouteOnMap(result){
   clearRouteOverlay();
+  // 경로 위에 출발지 배지를 다시 그리므로, 선택 단계에서 띄워둔 단독 S 마커는 지운다.
+  if (routeStartMarker){ try{ routeStartMarker.setMap(null); }catch(e){} routeStartMarker = null; }
   if (!map || !window.naver || !naver.maps) return;
   const pts = result.sites.map(siteLatLon);
   // 구간 경로선 (실도로 경로가 있으면 실제 선형, 없으면 점선 직선)
@@ -1123,32 +1241,164 @@ function drawRouteOnMap(result){
       }));
     } catch(e){}
   }
-  // 방문 순번 배지
+  // 방문 순번 배지 + 현장명 라벨 (출발지는 S 배지·남색으로 구분)
   result.sites.forEach((s, i)=>{
     try {
+      const st = !!s.isStart;
       routeOverlays.push(new naver.maps.Marker({
         map: map,
         position: new naver.maps.LatLng(pts[i].lat, pts[i].lon),
-        zIndex: 300,
-        icon: { content: `<div class="rt-badge">${i+1}</div>`, anchor: new naver.maps.Point(10, 10) }
+        zIndex: st ? 320 : 300,
+        icon: {
+          content: `<div class="rt-pin"><div class="rt-badge${st?' rt-badge-start':''}">`
+                 + `${routeOrdLabel(result, i)}</div>`
+                 + `<div class="rt-label${st?' rt-label-start':''}">${escHtml(s.site)}</div></div>`,
+          anchor: new naver.maps.Point(10, 10)
+        }
       }));
     } catch(e){}
   });
 }
 
+// 방문 순번 표기: 출발지는 S, 실제 현장은 1부터 번호를 매긴다.
+function routeOrdLabel(r, i){
+  if (r.sites[i] && r.sites[i].isStart) return 'S';
+  return String(r.hasStart ? i : i + 1);
+}
+
+// HTML 특수문자 이스케이프 (현장명에 &, < 등이 포함된 경우 대비)
+function escHtml(v){
+  return String(v == null ? '' : v)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ---- 계산된 순회경로를 지도 위 결과바에 계속 표시 ----
+const routePlanBarEl = document.getElementById('route-plan-bar');
+const routePlanTitleEl = document.getElementById('route-plan-title');
+const routePlanListEl = document.getElementById('route-plan-list');
+
+function renderRoutePlanBar(){
+  if (!routePlanBarEl) return;
+  const r = routeResult;
+  if (!r || !r.sites || r.sites.length < 2){ hideRoutePlanBar(); return; }
+
+  const nSite = r.sites.length - (r.hasStart ? 1 : 0);
+  routePlanTitleEl.innerHTML = `순회경로 ${nSite}곳${r.hasStart ? ' (출발지 지정)' : ''}`
+    + `<small>총 ${fmtKm(r.totalKm)} · ${fmtMin(r.totalMin)}`
+    + `${r.real ? '' : ' (추정치)'}</small>`;
+
+  let cum = 0;
+  routePlanListEl.innerHTML = r.sites.map((s, i)=>{
+    const leg = i > 0 ? r.legs[i-1] : null;
+    if (leg) cum += leg.min;
+    const sub = leg
+      ? `${escHtml(s.client)} · 이동 ${fmtMin(leg.min)} · 누적 ${fmtMin(cum)}`
+      : (s.isStart ? escHtml(s.addr || '출발 지점') : `${escHtml(s.client)} · 출발지`);
+    return `<div class="pb-item" data-site="${escHtml(s.site)}"`
+      + ` data-lat="${s.jlat}" data-lon="${s.jlon}">`
+      + `<span class="pb-ord${s.isStart?' is-start':''}">${routeOrdLabel(r, i)}</span>`
+      + `<span class="pb-txt"><span class="pb-name">${escHtml(s.site)}</span>`
+      + `<span class="pb-sub">${sub}</span></span></div>`;
+  }).join('');
+
+  // 항목을 누르면 해당 현장으로 지도를 이동한다.
+  routePlanListEl.querySelectorAll('.pb-item').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const la = parseFloat(el.dataset.lat), lo = parseFloat(el.dataset.lon);
+      if (!map || !isFinite(la) || !isFinite(lo)) return;
+      try {
+        map.setCenter(new naver.maps.LatLng(la, lo));
+        if (map.getZoom() < 14) map.setZoom(15);
+        if (isMobileLayout() && sidebarEl) sidebarEl.classList.remove('expanded');
+      } catch(e){}
+    });
+  });
+
+  // 현장 수가 많으면 지도 라벨이 서로 겹쳐 읽기 어려우므로 기본 숨김
+  document.body.classList.toggle('rt-labels-off', r.sites.length > 12);
+  document.body.classList.add('rt-planned');
+  routePlanBarEl.classList.add('show');
+}
+function hideRoutePlanBar(){
+  if (routePlanBarEl) routePlanBarEl.classList.remove('show');
+  document.body.classList.remove('rt-planned');
+  showRouteStartMarker();   // 경로가 지워지면 출발지 마커를 다시 띄운다
+}
+
+// ---- 출발지(사용자 입력 주소) ----
+// 입력한 주소를 지오코딩해 순회경로의 시작점으로 고정한다.
+// optimizeOrder 의 2-opt 는 tour[0] 을 옮기지 않으므로, 출발지를 배열 0번에
+// 넣기만 하면 방문 순서 최적화에서 시작점이 그대로 유지된다.
+const ROUTE_START_KEY = 'ddhz_route_start';
+let routeStart = null;   // {addr, label, lat, lon}
+let routeStartMarker = null;
+
+function loadRouteStart(){
+  try {
+    const v = JSON.parse(localStorage.getItem(ROUTE_START_KEY) || 'null');
+    if (v && isFinite(v.lat) && isFinite(v.lon)) routeStart = v;
+  } catch(e){}
+}
+function saveRouteStart(){
+  try {
+    if (routeStart) localStorage.setItem(ROUTE_START_KEY, JSON.stringify(routeStart));
+    else localStorage.removeItem(ROUTE_START_KEY);
+  } catch(e){}
+}
+// 출발지를 현장 객체와 같은 모양으로 감싼다(표·엑셀·지도 표시 로직 공용).
+function startAsSite(){
+  if (!routeStart) return null;
+  const s = {
+    site: '출발지', client: '출발지', manager: '-',
+    addr: routeStart.label || routeStart.addr,
+    geoaddr: routeStart.addr,
+    sido: '', gu: '', color: '#1f4e79',
+    lat: routeStart.lat, lon: routeStart.lon,
+    jlat: routeStart.lat, jlon: routeStart.lon,
+    isStart: true
+  };
+  CATS.forEach(c=>{ s[c.key] = 0; });
+  return s;
+}
+function showRouteStartMarker(){
+  if (routeStartMarker){ try{ routeStartMarker.setMap(null); }catch(e){} routeStartMarker = null; }
+  if (!routeStart || !map || !window.naver || !naver.maps) return;
+  if (!routeMode) return;
+  try {
+    routeStartMarker = new naver.maps.Marker({
+      map: map,
+      position: new naver.maps.LatLng(routeStart.lat, routeStart.lon),
+      zIndex: 320,
+      icon: {
+        content: `<div class="rt-pin"><div class="rt-badge rt-badge-start">S</div>`
+               + `<div class="rt-label rt-label-start">출발지</div></div>`,
+        anchor: new naver.maps.Point(10, 10)
+      }
+    });
+  } catch(e){}
+}
+
 // ---- 경로 계산 ----
 async function calcRoute(){
   const chosen = SITES.filter(s => routeSel.has(s.site));
-  if (chosen.length < 2){ alert('현장을 2곳 이상 선택해 주세요.'); return; }
+  const startSite = startAsSite();
+  const minSites = startSite ? 1 : 2;
+  if (chosen.length < minSites){
+    alert(startSite ? '현장을 1곳 이상 선택해 주세요.' : '현장을 2곳 이상 선택해 주세요.');
+    return;
+  }
   if (chosen.length > 25){ alert('한 번에 계산 가능한 현장은 25곳까지입니다. 담당자별 또는 지역별로 나눠 계산해 주세요.'); return; }
 
   const calcBtns = [...document.querySelectorAll('.route-calc-btn')];
   calcBtns.forEach(b=>{ b.disabled = true; b.textContent = '계산 중…'; });
 
   try {
-    const pts = chosen.map(siteLatLon);
+    // 출발지가 지정되면 0번에 넣어 시작점으로 고정한다.
+    const nodes = startSite ? [startSite].concat(chosen) : chosen;
+    const pts = nodes.map(siteLatLon);
     const order = optimizeOrder(pts);
-    const ordered = order.map(i => chosen[i]);
+    const ordered = order.map(i => nodes[i]);
     const oPts = order.map(i => pts[i]);
 
     const proxy = routeProxyUrl();
@@ -1190,6 +1440,7 @@ async function calcRoute(){
 
     routeResult = {
       sites: ordered,
+      hasStart: !!startSite,
       legs: legs,
       real: real,
       partial: real && failCount > 0,
@@ -1200,7 +1451,8 @@ async function calcRoute(){
       fuelPrice: legs.reduce((a,l)=>a+(l.fuelPrice||0), 0)
     };
     drawRouteOnMap(routeResult);
-    fitRouteBounds(routeResult);
+    renderRoutePlanBar();   // 결과창을 닫아도 방문순서·현장명이 지도 위에 남도록
+    fitRouteBounds(routeResult);  // 결과바 높이를 반영해 여백을 잡으려면 그 뒤에 호출
     openRouteModal();
   } finally {
     calcBtns.forEach(b=>{ b.disabled = false; b.textContent = '경로 계산'; });
@@ -1214,8 +1466,18 @@ function fitRouteBounds(result){
     let minLat=90, maxLat=-90, minLon=180, maxLon=-180;
     pts.forEach(p=>{ minLat=Math.min(minLat,p.lat); maxLat=Math.max(maxLat,p.lat);
                      minLon=Math.min(minLon,p.lon); maxLon=Math.max(maxLon,p.lon); });
-    map.fitBounds(new naver.maps.LatLngBounds(
-      new naver.maps.LatLng(minLat, minLon), new naver.maps.LatLng(maxLat, maxLon)));
+    const bounds = new naver.maps.LatLngBounds(
+      new naver.maps.LatLng(minLat, minLon), new naver.maps.LatLng(maxLat, maxLon));
+    // 지도 위 결과바·플로팅바에 마커가 가리지 않도록 아래쪽 여백을 확보한다.
+    const pb = document.getElementById('route-plan-bar');
+    const pbH = (pb && pb.classList.contains('show')) ? pb.offsetHeight : 0;
+    // fitBounds 는 정수 줌 단위로 맞춰지므로 실제보다 약간 넘칠 수 있어 넉넉히 준다.
+    const bottomPad = pbH + (isMobileLayout() ? 100 : 40);
+    try {
+      map.fitBounds(bounds, { top:40, right:40, bottom:bottomPad, left:40 });
+    } catch(e2){
+      map.fitBounds(bounds);   // 여백 옵션 미지원 버전 대비
+    }
   } catch(e){}
 }
 
@@ -1228,8 +1490,10 @@ const routeModalCloseEl = document.getElementById('route-modal-close');
 function openRouteModal(){
   const r = routeResult;
   if (!r) return;
-  const managers = [...new Set(r.sites.map(s=>s.manager))].join(', ');
-  routeModalSubEl.textContent = `${r.sites.length}개 현장 · 담당자 ${managers}`;
+  const realSites = r.sites.filter(s=>!s.isStart);
+  const managers = [...new Set(realSites.map(s=>s.manager))].join(', ');
+  routeModalSubEl.textContent = `${realSites.length}개 현장 · 담당자 ${managers}`
+    + (r.hasStart ? ` · 출발지 ${r.sites[0].addr || ''}` : '');
 
   const note = r.real
     ? (r.partial
@@ -1242,9 +1506,10 @@ function openRouteModal(){
     const leg = i > 0 ? r.legs[i-1] : null;
     if (leg) cum += leg.min;
     const tot = CATS.reduce((a,c)=>a+(s[c.key]||0),0);
+    const meta = s.isStart ? '경로 시작 지점' : `${s.client} · ${s.manager} · ${tot}명`;
     return `<tr>
-      <td><span class="ord">${i+1}</span></td>
-      <td><div>${s.site}</div><div class="sub">${s.client} · ${s.manager} · ${tot}명</div><div class="sub">${s.addr || '주소 정보 없음'}</div></td>
+      <td><span class="ord">${routeOrdLabel(r, i)}</span></td>
+      <td><div>${escHtml(s.site)}</div><div class="sub">${escHtml(meta)}</div><div class="sub">${escHtml(s.addr || '주소 정보 없음')}</div></td>
       <td class="num">${leg ? fmtKm(leg.km) : '-'}</td>
       <td class="num">${leg ? fmtMin(leg.min) : '출발'}</td>
       <td class="num">${leg ? fmtMin(cum) : '-'}</td>
@@ -1257,7 +1522,7 @@ function openRouteModal(){
   routeModalBodyEl.innerHTML = `
     ${note}
     <div class="route-summary">
-      <div class="rs-tile"><div class="num">${r.sites.length}</div><div class="lbl">방문 현장(곳)</div></div>
+      <div class="rs-tile"><div class="num">${realSites.length}</div><div class="lbl">방문 현장(곳)</div></div>
       <div class="rs-tile"><div class="num">${fmtKm(r.totalKm)}</div><div class="lbl">총 이동거리</div></div>
       <div class="rs-tile"><div class="num">${fmtMin(r.totalMin)}</div><div class="lbl">총 이동시간</div></div>
       ${fare}
@@ -1308,7 +1573,8 @@ function exportRouteExcel(){
   lines.push(['대덕휴비즈 현장 순회점검 계획']);
   lines.push(['작성일', today]);
   lines.push(['산출기준', basis]);
-  lines.push(['방문 현장 수', r.sites.length + '곳']);
+  lines.push(['방문 현장 수', r.sites.filter(s=>!s.isStart).length + '곳']);
+  if (r.hasStart) lines.push(['출발지', r.sites[0].addr || '']);
   lines.push(['총 이동거리', r.totalKm.toFixed(1) + 'km']);
   lines.push(['총 이동시간', Math.round(r.totalMin) + '분']);
   lines.push([]);
@@ -1318,8 +1584,8 @@ function exportRouteExcel(){
     const leg = i > 0 ? r.legs[i-1] : null;
     if (leg) cum += leg.min;
     lines.push([
-      i+1, s.site, s.client, s.manager, s.addr || '',
-      CATS.reduce((a,c)=>a+(s[c.key]||0),0),
+      routeOrdLabel(r, i), s.site, s.client, s.manager, s.addr || '',
+      s.isStart ? '' : CATS.reduce((a,c)=>a+(s[c.key]||0),0),
       leg ? leg.km.toFixed(1) : '',
       leg ? Math.round(leg.min) : '',
       leg ? Math.round(cum) : ''
@@ -1380,6 +1646,12 @@ function refreshAllMarkerIcons(){ SITES.forEach(refreshMarkerIcon); }
 
 function toggleRouteSite(s){
   if (routeSel.has(s.site)) routeSel.delete(s.site); else routeSel.add(s.site);
+  // 선택이 바뀌면 이전 계산 결과는 더 이상 맞지 않으므로 경로 표시를 지운다.
+  if (routeResult){
+    clearRouteOverlay();
+    routeResult = null;
+    hideRoutePlanBar();
+  }
   refreshMarkerIcon(s);
   updateRouteSelUi();
 }
@@ -1387,7 +1659,8 @@ function updateRouteSelUi(){
   const n = routeSel.size;
   const chosen = SITES.filter(s=>routeSel.has(s.site));
   const people = chosen.reduce((a,s)=>a+CATS.reduce((b,c)=>b+(s[c.key]||0),0), 0);
-  const text = n ? `선택된 현장 ${n}곳 · 근로자 ${people}명` : '선택된 현장 0곳';
+  const startTag = routeStart ? ' · 출발지 지정' : '';
+  const text = n ? `선택된 현장 ${n}곳 · 근로자 ${people}명${startTag}` : `선택된 현장 0곳${startTag}`;
   if (routeSelCountEl) routeSelCountEl.textContent = text;
   if (routeSelCountMEl) routeSelCountMEl.textContent = text;
   if (routeSelCountFEl){
@@ -1399,7 +1672,9 @@ function updateRouteSelUi(){
     const cb = el.querySelector('.rt-check');
     if (cb) cb.checked = on;
   });
-  document.querySelectorAll('.route-calc-btn').forEach(b=>{ b.disabled = n < 2; });
+  // 출발지가 지정되면 현장 1곳만으로도 경로(출발지→현장)가 성립한다.
+  const need = routeStart ? 1 : 2;
+  document.querySelectorAll('.route-calc-btn').forEach(b=>{ b.disabled = n < need; });
 }
 function setRouteMode(on){
   routeMode = on;
@@ -1415,6 +1690,8 @@ function setRouteMode(on){
     routeSel.clear();
     clearRouteOverlay();
     closeRouteModal();
+    routeResult = null;
+    hideRoutePlanBar();
   }
   if (isMobileLayout()){
     // 모바일: 순회 선택을 시작하면 시트를 자동으로 펼치고(전체화면 목록),
@@ -1423,6 +1700,8 @@ function setRouteMode(on){
     if (filterGroupEl) filterGroupEl.classList.toggle('collapsed', on);
     if (filterToggleEl) filterToggleEl.classList.remove('open');
   }
+  showRouteStartMarker();   // 순회모드일 때만 출발지 마커를 띄운다
+  if (on && typeof renderRouteStart === 'function') renderRouteStart();
   refreshAllMarkerIcons();
   renderList();
 }
@@ -1501,6 +1780,108 @@ const routeOpenListBtn = document.getElementById('route-open-list');
 if (routeOpenListBtn){
   routeOpenListBtn.addEventListener('click', ()=>{
     if (sidebarEl) sidebarEl.classList.add('expanded');
+  });
+}
+
+// ---- 지도 위 순회경로 결과바 조작 ----
+const routePlanLabelsBtn = document.getElementById('route-plan-labels');
+const routePlanDetailBtn = document.getElementById('route-plan-detail');
+const routePlanCloseBtn = document.getElementById('route-plan-close');
+if (routePlanLabelsBtn){
+  routePlanLabelsBtn.addEventListener('click', ()=>{
+    const off = document.body.classList.toggle('rt-labels-off');
+    routePlanLabelsBtn.classList.toggle('on', !off);
+  });
+}
+if (routePlanDetailBtn){
+  routePlanDetailBtn.addEventListener('click', ()=>{ if (routeResult) openRouteModal(); });
+}
+// ---- 출발지 입력 UI ----
+const routeStartInput = document.getElementById('route-start-input');
+const routeStartApplyBtn = document.getElementById('route-start-apply');
+const routeStartClearBtn = document.getElementById('route-start-clear');
+const routeStartStateEl = document.getElementById('route-start-state');
+const ROUTE_START_HELP = routeStartStateEl ? routeStartStateEl.textContent : '';
+
+function setStartState(msg, kind){
+  if (!routeStartStateEl) return;
+  routeStartStateEl.textContent = msg;
+  routeStartStateEl.classList.remove('ok','warn');
+  if (kind) routeStartStateEl.classList.add(kind);
+}
+function renderRouteStart(){
+  if (routeStart){
+    if (routeStartInput) routeStartInput.value = routeStart.addr || '';
+    setStartState(`출발지 지정됨 — ${routeStart.label || routeStart.addr}`, 'ok');
+  } else {
+    setStartState(ROUTE_START_HELP, null);
+  }
+  showRouteStartMarker();
+  updateRouteSelUi();
+}
+function applyRouteStart(){
+  const q = (routeStartInput ? routeStartInput.value : '').trim();
+  if (!q){ setStartState('출발지 주소를 입력해 주세요.', 'warn'); return; }
+  if (!(window.naver && naver.maps && naver.maps.Service && naver.maps.Service.geocode)){
+    setStartState('지도가 아직 준비되지 않았습니다. 잠시 후 다시 눌러 주세요.', 'warn');
+    return;
+  }
+  setStartState('주소를 조회하는 중…', null);
+  try {
+    naver.maps.Service.geocode({ query: q }, function(status, response){
+      const a = (status === naver.maps.Service.Status.OK && response.v2 && response.v2.addresses)
+        ? response.v2.addresses[0] : null;
+      const y = a ? parseFloat(a.y) : NaN, x = a ? parseFloat(a.x) : NaN;
+      if (!a || !isFinite(y) || !isFinite(x)){
+        setStartState('주소를 찾지 못했습니다. 도로명 또는 지번 주소를 다시 확인해 주세요.', 'warn');
+        return;
+      }
+      routeStart = { addr: q, label: a.roadAddress || a.jibunAddress || q, lat: y, lon: x };
+      saveRouteStart();
+      // 선택 변경과 마찬가지로 이전 계산 결과는 무효가 된다.
+      if (routeResult){ clearRouteOverlay(); routeResult = null; hideRoutePlanBar(); }
+      renderRouteStart();
+      if (map){
+        try { map.setCenter(new naver.maps.LatLng(y, x)); if (map.getZoom() < 12) map.setZoom(13); } catch(e){}
+      }
+    });
+  } catch(e){
+    setStartState('주소 조회 중 오류가 발생했습니다.', 'warn');
+  }
+}
+if (routeStartApplyBtn) routeStartApplyBtn.addEventListener('click', applyRouteStart);
+if (routeStartInput){
+  routeStartInput.addEventListener('keydown', (e)=>{ if (e.key === 'Enter'){ e.preventDefault(); applyRouteStart(); } });
+}
+if (routeStartClearBtn){
+  routeStartClearBtn.addEventListener('click', ()=>{
+    routeStart = null;
+    saveRouteStart();
+    if (routeStartInput) routeStartInput.value = '';
+    if (routeResult){ clearRouteOverlay(); routeResult = null; hideRoutePlanBar(); }
+    renderRouteStart();
+  });
+}
+// 저장된 출발지를 입력칸에 복원한다(지도·목록이 아직 준비되지 않았을 수 있으므로
+// 마커 표시와 버튼 상태 갱신은 순회모드 진입 시점에 수행한다).
+loadRouteStart();
+if (routeStart && routeStartInput){
+  routeStartInput.value = routeStart.addr || '';
+  setStartState(`출발지 지정됨 — ${routeStart.label || routeStart.addr}`, 'ok');
+}
+
+const routePlanFoldBtn = document.getElementById('route-plan-fold');
+if (routePlanFoldBtn){
+  routePlanFoldBtn.addEventListener('click', ()=>{
+    routePlanBarEl.classList.toggle('collapsed');
+    if (routeResult) fitRouteBounds(routeResult);   // 접힌 높이에 맞춰 지도 여백 재조정
+  });
+}
+if (routePlanCloseBtn){
+  routePlanCloseBtn.addEventListener('click', ()=>{
+    clearRouteOverlay();
+    routeResult = null;
+    hideRoutePlanBar();
   });
 }
 
