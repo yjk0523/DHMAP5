@@ -460,6 +460,38 @@
   .site-item .meta-name{font-weight:600;color:var(--ink-primary);overflow-wrap:anywhere;}
   .site-item .meta-sub{color:var(--ink-muted);font-size:11.5px;margin-top:1px;}
   .site-item .meta-count{color:var(--ink-secondary);font-size:11px;margin-top:1px;}
+  .site-item .meta-chev{
+    flex:none;align-self:center;color:var(--ink-muted);font-size:10px;
+    transition:transform .2s ease;
+  }
+  .site-item.sd-open{background:var(--surface-alt);}
+  .site-item.sd-open .meta-chev{transform:rotate(180deg);}
+
+  /* ── 목록 안에서 바로 펼쳐지는 현장 상세 (모달 이동 없이 확인) ── */
+  .site-detail{
+    border-bottom:1px solid var(--border);
+    background:#fbfcfd;
+    padding:8px 8px 10px 8px;
+  }
+  .sd-tabs{display:flex;gap:4px;margin-bottom:8px;}
+  .sd-tab{
+    flex:1;min-width:0;padding:7px 4px;
+    background:var(--surface);border:1px solid var(--border);border-radius:6px;
+    font-size:11.5px;font-weight:700;color:var(--ink-secondary);
+    cursor:pointer;-webkit-tap-highlight-color:transparent;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .sd-tab.on{background:#C00000;border-color:#C00000;color:#fff;}
+  .sd-body{max-height:46vh;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  .sd-addr{font-size:11.5px;color:var(--ink-secondary);line-height:1.5;margin-bottom:6px;word-break:break-all;}
+  .sd-cats .detail-row{
+    display:flex;justify-content:space-between;gap:10px;
+    padding:5px 2px;border-bottom:1px solid var(--surface-alt);font-size:12px;
+  }
+  .sd-cats .detail-row:last-child{border-bottom:none;}
+  .tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .site-detail .worker-table{width:100%;}
+  .site-detail .worker-meta{font-size:11px;margin-bottom:6px;}
 
   #map{flex:1;position:relative;background:#eef1f4;}
 
@@ -1032,6 +1064,7 @@ function selectSite(s){
 function clearSelection(){
   selectedSite = null;
   selectedView = null;
+  closeSiteDetail();
   renderStats();
   highlightListItem(null);
   closeWorkerModal();
@@ -1050,12 +1083,10 @@ const workerModalSubEl = document.getElementById('worker-modal-sub');
 const workerModalBodyEl = document.getElementById('worker-modal-body');
 const workerModalCloseEl = document.getElementById('worker-modal-close');
 
-function openWorkerModal(s){
+// 근로자 명단 본문 HTML — 모달과 목록 인라인 패널이 함께 사용한다.
+function workerBodyHtml(s){
   const roster = (typeof WORKERS_BY_SITE !== 'undefined') ? WORKERS_BY_SITE[s.site] : null;
   const asof = (typeof WORKERS_ASOF !== 'undefined') ? WORKERS_ASOF : '';
-  workerModalSiteEl.textContent = s.site;
-  workerModalSubEl.textContent = `${s.client} · ${s.manager}`;
-
   if (roster && roster.length){
     const rows = roster.map(w => `
       <tr>
@@ -1064,19 +1095,24 @@ function openWorkerModal(s){
         <td>${w.jobType || ''}</td>
         <td>${w.hireDate || ''}</td>
       </tr>`).join('');
-    workerModalBodyEl.innerHTML = `
+    return `
       <div class="worker-meta">총 ${roster.length}명${asof ? ` · ${(typeof WORKERS_SOURCE!=='undefined'?WORKERS_SOURCE:'재직자현황')} ${asof} 기준` : ''}</div>
-      <table class="worker-table">
+      <div class="tbl-scroll"><table class="worker-table">
         <thead><tr><th>이름</th><th>나이</th><th>직종</th><th>입사일자</th></tr></thead>
         <tbody>${rows}</tbody>
-      </table>`;
-  } else {
-    workerModalBodyEl.innerHTML = `
+      </table></div>`;
+  }
+  return `
       <div class="worker-empty">
         이 현장은 근로자 명단 자료에서 명단을 확인할 수 없습니다.<br/>
         (자료 기준일과 현장 목록 갱신 시점의 차이, 또는 현장명 표기 차이로 일부 현장은 매칭되지 않을 수 있습니다.)
       </div>`;
-  }
+}
+
+function openWorkerModal(s){
+  workerModalSiteEl.textContent = s.site;
+  workerModalSubEl.textContent = `${s.client} · ${s.manager}`;
+  workerModalBodyEl.innerHTML = workerBodyHtml(s);
   workerModalEl.classList.remove('hidden');
 }
 
@@ -1104,11 +1140,11 @@ const trainingModalBodyEl = document.getElementById('training-modal-body');
 const trainingModalCloseEl = document.getElementById('training-modal-close');
 
 function trColor(p){ return p>=90 ? '#03c75a' : p>=70 ? '#1f5eff' : p>=50 ? '#f5a623' : '#e0393e'; }
-function openTrainingModal(s){
+
+// 교육수료현황 본문 HTML — 모달과 목록 인라인 패널이 함께 사용한다.
+function trainingBodyHtml(s){
   const rows = (typeof TRAINING_BY_SITE !== 'undefined') ? TRAINING_BY_SITE[s.site] : null;
   const asof = (typeof TRAINING_ASOF !== 'undefined') ? TRAINING_ASOF : '';
-  trainingModalSiteEl.textContent = s.site;
-  trainingModalSubEl.textContent = `${s.client} · ${s.manager}`;
   if (rows && rows.length){
     const rated = rows.filter(w => w.rate !== null && w.rate !== undefined && w.rate !== '');
     const avg = rated.length ? Math.round(rated.reduce((a,w)=>a+Number(w.rate),0)/rated.length) : null;
@@ -1119,7 +1155,7 @@ function openTrainingModal(s){
       const pct = has ? `<div class="tr-pct">${p}%</div>` : `<div class="tr-pct none">미입력</div>`;
       return `<div class="tr-row"><div class="tr-name" title="${w.name||''}">${w.name||''}</div><div class="tr-track">${fill}</div>${pct}</div>`;
     }).join('');
-    trainingModalBodyEl.innerHTML = `
+    return `
       <div class="worker-meta">총 ${rows.length}명${avg!==null ? ` · 평균 수료율 ${avg}%` : ''}${asof ? ` · ${asof} 기준` : ''}</div>
       ${bars}
       <div class="tr-legend">
@@ -1128,13 +1164,28 @@ function openTrainingModal(s){
         <span><i style="background:#f5a623"></i>50~69%</span>
         <span><i style="background:#e0393e"></i>50% 미만</span>
       </div>`;
-  } else {
-    trainingModalBodyEl.innerHTML = `
+  }
+  return `
       <div class="worker-empty">
         교육수료현황 자료가 아직 등록되지 않았습니다.<br/>
         교육수료 자료(엑셀 등)를 전달해 주시면 현장별로 표시해 드립니다.
       </div>`;
-  }
+}
+
+// 현장 정보(주소·직종별 인원) 본문 HTML
+function siteInfoBodyHtml(s){
+  const rows = CATS.map(c=> (s[c.key]||0)>0
+    ? `<div class="detail-row"><span>${c.label}</span><b>${s[c.key]}명</b></div>` : '').join('');
+  return `
+    <div class="worker-meta">배치 인원 총 ${siteTotal(s)}명 · ${escHtml(s.client)} · 담당 ${escHtml(s.manager)}</div>
+    <div class="sd-addr">${escHtml(s.addr || '주소 정보 없음')}</div>
+    <div class="sd-cats">${rows || '<div class="worker-empty">직종별 배치 인원 정보가 없습니다.</div>'}</div>`;
+}
+
+function openTrainingModal(s){
+  trainingModalSiteEl.textContent = s.site;
+  trainingModalSubEl.textContent = `${s.client} · ${s.manager}`;
+  trainingModalBodyEl.innerHTML = trainingBodyHtml(s);
   trainingModalEl.classList.remove('hidden');
 }
 
@@ -1765,6 +1816,7 @@ function updateRouteSelUi(){
 }
 function setRouteMode(on){
   routeMode = on;
+  expandedSite = null;   // 순회모드에서는 목록 클릭이 '선택'이므로 상세를 닫는다
   document.body.classList.toggle('route-active', on);
   if (routeToggleEl){
     routeToggleEl.classList.toggle('on', on);
@@ -1873,6 +1925,12 @@ if (filterToggleEl && filterGroupEl){
     filterGroupEl.classList.toggle('collapsed');
     filterToggleEl.classList.toggle('open');
   });
+  // 모바일은 화면이 좁아 검색·필터가 펼쳐져 있으면 현장 목록이 거의 보이지 않는다.
+  // 처음에는 접어두고, [검색·필터]를 눌러 펼치도록 한다.
+  if (isMobileLayout()){
+    filterGroupEl.classList.add('collapsed');
+    filterToggleEl.classList.remove('open');
+  }
 }
 // 모바일: 시트를 접어 지도가 보일 때, 지도 위 플로팅바의 [목록 열기]로
 // 다시 시트를 펼칠 수 있게 한다(마커 탭 선택 ↔ 목록 선택을 오가기 쉽도록).
@@ -2107,6 +2165,69 @@ function matches(s, f){
   return true;
 }
 
+// ---- 목록 인라인 현장 상세 (모달·화면이동 없이 바로 확인) ----
+let expandedSite = null;          // 현재 펼쳐진 현장명
+let expandedView = 'info';        // 'info' | 'worker' | 'train'
+const SD_TABS = [
+  { key:'info',   label:'현장 정보' },
+  { key:'worker', label:'근로자 정보' },
+  { key:'train',  label:'교육수료현황' }
+];
+
+function sdBodyHtml(s, view){
+  if (view === 'worker') return workerBodyHtml(s);
+  if (view === 'train')  return trainingBodyHtml(s);
+  return siteInfoBodyHtml(s);
+}
+
+function buildSiteDetail(s){
+  const box = document.createElement('div');
+  box.className = 'site-detail';
+  box.dataset.site = s.site;
+  box.innerHTML = `
+    <div class="sd-tabs">
+      ${SD_TABS.map(t=>`<button class="sd-tab${t.key===expandedView?' on':''}" data-v="${t.key}">${t.label}</button>`).join('')}
+    </div>
+    <div class="sd-body">${sdBodyHtml(s, expandedView)}</div>`;
+  // 패널 안에서의 클릭이 목록 항목 클릭(접기)으로 번지지 않도록 막는다.
+  box.addEventListener('click', (e)=> e.stopPropagation());
+  box.querySelectorAll('.sd-tab').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      expandedView = btn.dataset.v;
+      box.querySelectorAll('.sd-tab').forEach(b=>b.classList.toggle('on', b===btn));
+      box.querySelector('.sd-body').innerHTML = sdBodyHtml(s, expandedView);
+    });
+  });
+  return box;
+}
+
+function toggleSiteDetail(s, item){
+  const wasOpen = (expandedSite === s.site);
+  // 이미 열려 있던 패널은 닫는다(한 번에 하나만 펼침)
+  siteListEl.querySelectorAll('.site-detail').forEach(el=>el.remove());
+  siteListEl.querySelectorAll('.site-item.sd-open').forEach(el=>el.classList.remove('sd-open'));
+  if (wasOpen){ expandedSite = null; return; }
+  expandedSite = s.site;
+  expandedView = 'info';
+  // 모바일: 검색·필터가 펼쳐져 있으면 패널이 보일 공간이 없으므로 접는다.
+  if (isMobileLayout() && filterGroupEl && !filterGroupEl.classList.contains('collapsed')){
+    filterGroupEl.classList.add('collapsed');
+    if (filterToggleEl) filterToggleEl.classList.remove('open');
+  }
+  item.classList.add('sd-open');
+  const box = buildSiteDetail(s);
+  item.parentNode.insertBefore(box, item.nextSibling);
+  // 펼친 항목이 화면 밖으로 밀리지 않도록 목록 안에서만 스크롤을 맞춘다.
+  try { item.scrollIntoView({ block:'nearest', behavior:'smooth' }); } catch(e){}
+}
+
+function closeSiteDetail(){
+  expandedSite = null;
+  if (!siteListEl) return;
+  siteListEl.querySelectorAll('.site-detail').forEach(el=>el.remove());
+  siteListEl.querySelectorAll('.site-item.sd-open').forEach(el=>el.classList.remove('sd-open'));
+}
+
 function renderList(){
   const f = currentFilters();
   const filtered = SITES.filter(s=>matches(s,f));
@@ -2127,6 +2248,7 @@ function renderList(){
       const checkHtml = routeMode
         ? `<input class="rt-check" type="checkbox" ${routeSel.has(s.site) ? 'checked' : ''} tabindex="-1" />` : '';
       if (routeMode && routeSel.has(s.site)) item.classList.add('rt-on');
+      const chevHtml = routeMode ? '' : '<div class="meta-chev">\u25bc</div>';
       item.innerHTML = `
         ${checkHtml}
         <div class="swatch" style="background:${s.color}"></div>
@@ -2134,7 +2256,8 @@ function renderList(){
           <div class="meta-name">${s.site}</div>
           <div class="meta-sub">${s.client} · ${s.manager}</div>
           <div class="meta-count">${countTxt}</div>
-        </div>`;
+        </div>
+        ${chevHtml}`;
       item.addEventListener('click', ()=>{
         // 순회경로 계획 모드에서는 목록 클릭이 '현장 선택/해제'로 동작한다
         if (routeMode){ toggleRouteSite(s); return; }
@@ -2144,9 +2267,14 @@ function renderList(){
           map.setZoom(15);
         }
         selectSite(s);
-        if (sidebarEl) sidebarEl.classList.remove('expanded'); // reveal the map on mobile
+        // 화면을 옮기지 않고 목록 안에서 상세(현장정보·근로자·교육수료)를 펼친다.
+        toggleSiteDetail(s, item);
       });
       frag.appendChild(item);
+      if (!routeMode && expandedSite === s.site){
+        item.classList.add('sd-open');
+        frag.appendChild(buildSiteDetail(s));
+      }
     });
   siteListEl.appendChild(frag);
 
@@ -2166,6 +2294,8 @@ function renderList(){
     } else {
       selectedSite = null;
       selectedView = null;
+      expandedSite = null;
+      closeSiteDetail();
       closeWorkerModal();
       closeTrainingModal();
     }
@@ -2177,6 +2307,7 @@ function renderList(){
 function onFilterChange(){
   selectedSite = null;
   selectedView = null;
+  expandedSite = null;
   closeWorkerModal();
   closeTrainingModal();
   renderList();
