@@ -192,6 +192,14 @@
   }
   #route-start-state.ok{color:#1c6b3c;font-weight:600;}
   #route-start-state.warn{color:#8f0000;font-weight:600;}
+  /* 평상시(순회모드 아님) 지도에서 고른 현장 — 점을 키우고 현장명 라벨을 붙인다.
+     터치 화면에서는 마우스오버 툴팁을 쓸 수 없어 이름을 확인할 방법이 없었다. */
+  .nv-marker-pick{
+    position:relative;width:18px;height:18px;flex:none;
+    border-radius:50%;border:3px solid #ffffff;
+    box-shadow:0 0 0 2px rgba(0,0,0,0.35),0 2px 6px rgba(0,0,0,0.3);
+  }
+  .rt-label-pick{border-color:#1c2029 !important;color:#1c2029 !important;}
   .rt-badge-start{background:#1f4e79 !important;}
   .rt-label-start{border-color:#1f4e79 !important;color:#123a5c !important;}
   #route-plan-bar .pb-ord.is-start{background:#1f4e79;}
@@ -279,7 +287,8 @@
        (라벨 추가 시 묶음 전체에 pointer-events:none 을 걸어 재탭이 막혔던 문제)
      · 경로 결과 배지(.rt-pin-static): 조작 대상이 아니므로 전체 통과 */
   .rt-pin{display:flex;align-items:center;white-space:nowrap;pointer-events:none;}
-  .rt-pin > .nv-marker-sel{pointer-events:auto;cursor:pointer;}
+  .rt-pin > .nv-marker-sel,
+  .rt-pin > .nv-marker-pick{pointer-events:auto;cursor:pointer;}
   .rt-pin-static > *{pointer-events:none;}
   .rt-label{
     margin-left:5px;
@@ -460,39 +469,6 @@
   .site-item .meta-name{font-weight:600;color:var(--ink-primary);overflow-wrap:anywhere;}
   .site-item .meta-sub{color:var(--ink-muted);font-size:11.5px;margin-top:1px;}
   .site-item .meta-count{color:var(--ink-secondary);font-size:11px;margin-top:1px;}
-  .site-item .meta-chev{
-    flex:none;align-self:center;color:var(--ink-muted);font-size:10px;
-    transition:transform .2s ease;
-  }
-  .site-item.sd-open{background:var(--surface-alt);}
-  .site-item.sd-open .meta-chev{transform:rotate(180deg);}
-
-  /* ── 목록 안에서 바로 펼쳐지는 현장 상세 (모달 이동 없이 확인) ── */
-  .site-detail{
-    border-bottom:1px solid var(--border);
-    background:#fbfcfd;
-    padding:8px 8px 10px 8px;
-  }
-  .sd-tabs{display:flex;gap:4px;margin-bottom:8px;}
-  .sd-tab{
-    flex:1;min-width:0;padding:7px 4px;
-    background:var(--surface);border:1px solid var(--border);border-radius:6px;
-    font-size:11.5px;font-weight:700;color:var(--ink-secondary);
-    cursor:pointer;-webkit-tap-highlight-color:transparent;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  }
-  .sd-tab.on{background:#C00000;border-color:#C00000;color:#fff;}
-  .sd-body{max-height:46vh;overflow-y:auto;-webkit-overflow-scrolling:touch;}
-  .sd-addr{font-size:11.5px;color:var(--ink-secondary);line-height:1.5;margin-bottom:6px;word-break:break-all;}
-  .sd-cats .detail-row{
-    display:flex;justify-content:space-between;gap:10px;
-    padding:5px 2px;border-bottom:1px solid var(--surface-alt);font-size:12px;
-  }
-  .sd-cats .detail-row:last-child{border-bottom:none;}
-  .tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
-  .site-detail .worker-table{width:100%;}
-  .site-detail .worker-meta{font-size:11px;margin-bottom:6px;}
-
   #map{flex:1;position:relative;background:#eef1f4;}
 
   .site-tip{
@@ -589,7 +565,11 @@
     .stat-tile-chart{min-width:0;max-width:100%;flex:1 1 100%;}
     .stat-tile-detail{min-width:0;max-width:100%;flex:1 1 100%;}
 
-    #main{position:relative;flex-direction:column;}
+    /* 접힌 시트는 transform 으로 화면 밖에 내려가 있는데, 이 영역이 문서
+       스크롤 범위에 잡혀 페이지 전체가 위아래로 밀리는 문제가 있었다
+       (실측: 뷰포트 640px, 문서 1041px). 잘라내어 한 화면에 고정한다. */
+    #main{position:relative;flex-direction:column;overflow:hidden;}
+    body{overflow:hidden;}
     #map{width:100%;flex:1;}
 
     #sidebar{
@@ -732,10 +712,6 @@
       left:12px;right:12px;width:auto;max-width:none;
       bottom:calc(56px + env(safe-area-inset-bottom,0px));
     }
-    /* 모바일에서는 지도가 가려지지 않도록 목록 높이를 낮게 제한한다. */
-    #route-plan-bar .pb-list{max-height:150px;}
-
-    /* 마지막으로 누른 현장명이 길어도 한 줄로 유지되도록 말줄임 처리 */
     #route-float-bar .cnt{
       flex:1;min-width:0;
       font-size:11.5px;font-weight:700;color:var(--ink-primary);line-height:1.4;
@@ -1059,14 +1035,15 @@ function selectSite(s){
   selectedView = null;
   renderStats();
   highlightListItem(s.site);
+  refreshAllMarkerIcons();   // 고른 현장에 현장명 라벨을 붙인다
 }
 
 function clearSelection(){
   selectedSite = null;
   selectedView = null;
-  closeSiteDetail();
   renderStats();
   highlightListItem(null);
+  refreshAllMarkerIcons();
   closeWorkerModal();
   closeTrainingModal();
 }
@@ -1177,9 +1154,8 @@ function siteInfoBodyHtml(s){
   const rows = CATS.map(c=> (s[c.key]||0)>0
     ? `<div class="detail-row"><span>${c.label}</span><b>${s[c.key]}명</b></div>` : '').join('');
   return `
-    <div class="worker-meta">배치 인원 총 ${siteTotal(s)}명 · ${escHtml(s.client)} · 담당 ${escHtml(s.manager)}</div>
-    <div class="sd-addr">${escHtml(s.addr || '주소 정보 없음')}</div>
-    <div class="sd-cats">${rows || '<div class="worker-empty">직종별 배치 인원 정보가 없습니다.</div>'}</div>`;
+    <div class="sc-addr">${escHtml(s.addr || '주소 정보 없음')}</div>
+    ${rows || '<div class="worker-empty">직종별 배치 인원 정보가 없습니다.</div>'}`;
 }
 
 function openTrainingModal(s){
@@ -1748,8 +1724,26 @@ function syncLabelVisibility(){
   document.body.classList.toggle('rt-labels-off', n > LABEL_AUTO_LIMIT);
 }
 
+// 마커 표시 상태
+//  route : 순회모드에서 선택된 현장(붉은 ✓ 배지)
+//  pick  : 평상시 지도/목록에서 고른 현장(큰 점 + 현장명 라벨)
+//  plain : 그 외
+function markerStateFor(s){
+  if (routeMode) return routeSel.has(s.site) ? 'route' : 'plain';
+  return (selectedSite && selectedSite.site === s.site) ? 'pick' : 'plain';
+}
+
 function markerIconFor(s, selected){
-  if (selected){
+  // 평상시 고른 현장: 현장명만 지도에 표시(상세는 상단 버튼에서 확인)
+  if (selected === 'pick'){
+    return {
+      content: `<div class="rt-pin">`
+        + `<div class="nv-marker nv-marker-pick" style="background:${s.color};"></div>`
+        + `<div class="rt-label rt-label-pick">${escHtml(s.site)}</div></div>`,
+      anchor: new naver.maps.Point(9, 9)
+    };
+  }
+  if (selected === true || selected === 'route'){
     // 지도를 눌러 선택할 때(특히 모바일)는 마우스오버 툴팁을 쓸 수 없으므로
     // 선택된 마커 옆에 현장명 라벨을 함께 표시한다.
     return {
@@ -1770,7 +1764,7 @@ function markerIconFor(s, selected){
 function refreshMarkerIcon(s){
   const rec = markersBySite.get(s.site);
   if (!rec) return;
-  try { rec.marker.setIcon(markerIconFor(s, routeMode && routeSel.has(s.site))); } catch(e){}
+  try { rec.marker.setIcon(markerIconFor(s, markerStateFor(s))); } catch(e){}
 }
 function refreshAllMarkerIcons(){ SITES.forEach(refreshMarkerIcon); }
 
@@ -1816,7 +1810,6 @@ function updateRouteSelUi(){
 }
 function setRouteMode(on){
   routeMode = on;
-  expandedSite = null;   // 순회모드에서는 목록 클릭이 '선택'이므로 상세를 닫는다
   document.body.classList.toggle('route-active', on);
   if (routeToggleEl){
     routeToggleEl.classList.toggle('on', on);
@@ -2124,6 +2117,7 @@ function buildMarkers(){
     naver.maps.Event.addListener(marker, 'mouseout', ()=> infoWindow.close());
     // 순회경로 계획 모드에서는 마커 클릭이 '현장 선택/해제'로 동작한다
     naver.maps.Event.addListener(marker, 'click', ()=>{
+      // 순회모드에서는 '선택/해제', 평상시에는 '현장 선택'(지도 이동 없음).
       if (routeMode) toggleRouteSite(s); else selectSite(s);
     });
     markersBySite.set(s.site, { marker, infoWindow, pos });
@@ -2165,69 +2159,6 @@ function matches(s, f){
   return true;
 }
 
-// ---- 목록 인라인 현장 상세 (모달·화면이동 없이 바로 확인) ----
-let expandedSite = null;          // 현재 펼쳐진 현장명
-let expandedView = 'info';        // 'info' | 'worker' | 'train'
-const SD_TABS = [
-  { key:'info',   label:'현장 정보' },
-  { key:'worker', label:'근로자 정보' },
-  { key:'train',  label:'교육수료현황' }
-];
-
-function sdBodyHtml(s, view){
-  if (view === 'worker') return workerBodyHtml(s);
-  if (view === 'train')  return trainingBodyHtml(s);
-  return siteInfoBodyHtml(s);
-}
-
-function buildSiteDetail(s){
-  const box = document.createElement('div');
-  box.className = 'site-detail';
-  box.dataset.site = s.site;
-  box.innerHTML = `
-    <div class="sd-tabs">
-      ${SD_TABS.map(t=>`<button class="sd-tab${t.key===expandedView?' on':''}" data-v="${t.key}">${t.label}</button>`).join('')}
-    </div>
-    <div class="sd-body">${sdBodyHtml(s, expandedView)}</div>`;
-  // 패널 안에서의 클릭이 목록 항목 클릭(접기)으로 번지지 않도록 막는다.
-  box.addEventListener('click', (e)=> e.stopPropagation());
-  box.querySelectorAll('.sd-tab').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      expandedView = btn.dataset.v;
-      box.querySelectorAll('.sd-tab').forEach(b=>b.classList.toggle('on', b===btn));
-      box.querySelector('.sd-body').innerHTML = sdBodyHtml(s, expandedView);
-    });
-  });
-  return box;
-}
-
-function toggleSiteDetail(s, item){
-  const wasOpen = (expandedSite === s.site);
-  // 이미 열려 있던 패널은 닫는다(한 번에 하나만 펼침)
-  siteListEl.querySelectorAll('.site-detail').forEach(el=>el.remove());
-  siteListEl.querySelectorAll('.site-item.sd-open').forEach(el=>el.classList.remove('sd-open'));
-  if (wasOpen){ expandedSite = null; return; }
-  expandedSite = s.site;
-  expandedView = 'info';
-  // 모바일: 검색·필터가 펼쳐져 있으면 패널이 보일 공간이 없으므로 접는다.
-  if (isMobileLayout() && filterGroupEl && !filterGroupEl.classList.contains('collapsed')){
-    filterGroupEl.classList.add('collapsed');
-    if (filterToggleEl) filterToggleEl.classList.remove('open');
-  }
-  item.classList.add('sd-open');
-  const box = buildSiteDetail(s);
-  item.parentNode.insertBefore(box, item.nextSibling);
-  // 펼친 항목이 화면 밖으로 밀리지 않도록 목록 안에서만 스크롤을 맞춘다.
-  try { item.scrollIntoView({ block:'nearest', behavior:'smooth' }); } catch(e){}
-}
-
-function closeSiteDetail(){
-  expandedSite = null;
-  if (!siteListEl) return;
-  siteListEl.querySelectorAll('.site-detail').forEach(el=>el.remove());
-  siteListEl.querySelectorAll('.site-item.sd-open').forEach(el=>el.classList.remove('sd-open'));
-}
-
 function renderList(){
   const f = currentFilters();
   const filtered = SITES.filter(s=>matches(s,f));
@@ -2248,7 +2179,6 @@ function renderList(){
       const checkHtml = routeMode
         ? `<input class="rt-check" type="checkbox" ${routeSel.has(s.site) ? 'checked' : ''} tabindex="-1" />` : '';
       if (routeMode && routeSel.has(s.site)) item.classList.add('rt-on');
-      const chevHtml = routeMode ? '' : '<div class="meta-chev">\u25bc</div>';
       item.innerHTML = `
         ${checkHtml}
         <div class="swatch" style="background:${s.color}"></div>
@@ -2256,8 +2186,7 @@ function renderList(){
           <div class="meta-name">${s.site}</div>
           <div class="meta-sub">${s.client} · ${s.manager}</div>
           <div class="meta-count">${countTxt}</div>
-        </div>
-        ${chevHtml}`;
+        </div>`;
       item.addEventListener('click', ()=>{
         // 순회경로 계획 모드에서는 목록 클릭이 '현장 선택/해제'로 동작한다
         if (routeMode){ toggleRouteSite(s); return; }
@@ -2267,14 +2196,9 @@ function renderList(){
           map.setZoom(15);
         }
         selectSite(s);
-        // 화면을 옮기지 않고 목록 안에서 상세(현장정보·근로자·교육수료)를 펼친다.
-        toggleSiteDetail(s, item);
+        if (sidebarEl) sidebarEl.classList.remove('expanded'); // reveal the map on mobile
       });
       frag.appendChild(item);
-      if (!routeMode && expandedSite === s.site){
-        item.classList.add('sd-open');
-        frag.appendChild(buildSiteDetail(s));
-      }
     });
   siteListEl.appendChild(frag);
 
@@ -2294,8 +2218,6 @@ function renderList(){
     } else {
       selectedSite = null;
       selectedView = null;
-      expandedSite = null;
-      closeSiteDetail();
       closeWorkerModal();
       closeTrainingModal();
     }
@@ -2307,7 +2229,6 @@ function renderList(){
 function onFilterChange(){
   selectedSite = null;
   selectedView = null;
-  expandedSite = null;
   closeWorkerModal();
   closeTrainingModal();
   renderList();
