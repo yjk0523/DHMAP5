@@ -2179,6 +2179,34 @@ function popupHtml(s){
   return `<div class="site-tip"><b>${s.site}</b></div>`;
 }
 
+// ---- 현장명 말풍선(툴팁) 단일 관리 ----
+// 터치 기기(태블릿·터치 노트북)는 탭 시 mouseover 만 발생하고 mouseout 이
+// 발생하지 않아 이전 현장의 말풍선이 닫히지 않고 누적되는 문제가 있었다.
+// (1) 열린 말풍선을 항상 1개만 유지하고 (2) 터치 입력일 때는 hover 말풍선을
+// 띄우지 않으며 (3) 클릭·지도 조작 시 반드시 닫는다.
+let openTip = null;
+function closeTip(){
+  if (openTip){ try { openTip.close(); } catch(e){} openTip = null; }
+}
+function openTipFor(iw, marker){
+  if (openTip === iw) return;
+  closeTip();
+  iw.open(map, marker);
+  openTip = iw;
+}
+// 마지막 입력이 터치였는지 추적 (마우스+터치 겸용 노트북 대응)
+let usingTouch = false;
+if (window.PointerEvent){
+  window.addEventListener('pointerdown', function(e){
+    usingTouch = !!e.pointerType && e.pointerType !== 'mouse';
+    if (usingTouch) closeTip();
+  }, true);
+} else {
+  window.addEventListener('touchstart', function(){ usingTouch = true; closeTip(); }, true);
+  window.addEventListener('mousemove', function(){ usingTouch = false; }, true);
+}
+const CAN_HOVER = !window.matchMedia || window.matchMedia('(hover: hover)').matches;
+
 let map = null;
 const markersBySite = new Map(); // site -> {marker, infoWindow, pos}
 
@@ -2196,10 +2224,17 @@ function buildMarkers(){
       backgroundColor: 'transparent',
       disableAnchor: true
     });
-    naver.maps.Event.addListener(marker, 'mouseover', ()=> infoWindow.open(map, marker));
-    naver.maps.Event.addListener(marker, 'mouseout', ()=> infoWindow.close());
+    // hover 말풍선은 마우스 기기에서만 사용한다(터치 탭이 흉내내는 mouseover 는 무시).
+    if (CAN_HOVER){
+      naver.maps.Event.addListener(marker, 'mouseover', ()=>{
+        if (usingTouch) return;
+        openTipFor(infoWindow, marker);
+      });
+      naver.maps.Event.addListener(marker, 'mouseout', ()=> closeTip());
+    }
     // 순회경로 계획 모드에서는 마커 클릭이 '현장 선택/해제'로 동작한다
     naver.maps.Event.addListener(marker, 'click', ()=>{
+      closeTip();   // 이전 현장 말풍선을 반드시 닫는다
       // 순회모드에서는 '선택/해제', 평상시에는 '현장 선택'(지도 이동 없음).
       if (routeMode) toggleRouteSite(s); else selectSite(s);
     });
@@ -2343,6 +2378,10 @@ function initNaverMap(){
     zoom: 7
   });
   buildMarkers();
+  // 지도 클릭·이동·확대축소 시에도 열려 있던 말풍선을 닫는다
+  ['click','dragstart','zoom_changed'].forEach(function(ev){
+    naver.maps.Event.addListener(map, ev, closeTip);
+  });
   renderList();
   keyGate.classList.add('hidden');
   geocodeAndPlace();  // 주소를 실제 좌표로 변환해 마커를 정밀 위치로 이동
