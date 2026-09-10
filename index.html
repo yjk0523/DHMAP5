@@ -1861,6 +1861,10 @@ function toggleRouteSite(s){
     hideRoutePlanBar();
   }
   refreshMarkerIcon(s);
+  // 필터 밖에서 '선택 유지'로 표시 중이던 현장을 해제하면 목록·지도에서 내린다
+  if (routeMode && !routeSel.has(s.site) && !lastFiltered.some(x=>x.site === s.site)){
+    renderList();
+  }
   updateRouteSelUi();
 }
 function updateRouteSelUi(){
@@ -1941,9 +1945,11 @@ if (routeManagerSel){
   });
   routeManagerSel.addEventListener('change', ()=>{
     const m = routeManagerSel.value;
-    routeSel.clear();
     lastTapped = null;
     clearRouteOverlay();
+    routeResult = null;
+    hideRoutePlanBar();
+    // 기존 선택은 유지하고 해당 담당자의 현장을 더한다(전체 초기화는 '선택 해제')
     if (m) SITES.filter(s=>s.manager === m).forEach(s=>routeSel.add(s.site));
     // 선택한 담당자의 현장만 목록·지도에 보이도록 사이드바 필터도 함께 맞춘다
     const mf = document.getElementById('manager-filter');
@@ -1963,14 +1969,21 @@ if (routeManagerSel){
 // 1회 계산 한도(25곳)를 넘지 않도록 목록 순서대로 25곳까지만 선택한다.
 document.getElementById('route-select-all').addEventListener('click', ()=>{
   const list = lastFiltered.slice().sort((a,b)=>a.site.localeCompare(b.site,'ko'));
-  routeSel.clear();
   lastTapped = null;   // 일괄 선택이므로 '마지막으로 누른 현장' 표시는 초기화
-  list.slice(0, 25).forEach(s=>routeSel.add(s.site));
+  // 기존 선택은 유지하고 현재 목록을 더한다(전체 초기화는 '선택 해제' 버튼)
+  let skipped = 0;
+  list.forEach(s=>{
+    if (routeSel.has(s.site)) return;
+    if (routeSel.size >= 25){ skipped++; return; }
+    routeSel.add(s.site);
+  });
   updateRouteSelUi();
   refreshAllMarkerIcons();
-  if (list.length > 25 && routeHintEl){
-    routeHintEl.textContent = `목록 ${list.length}곳 중 앞의 25곳만 선택하였습니다. 1회 계산 한도가 25곳이므로 담당자별·지역별로 나누어 계산해 주세요.`;
+  if (skipped && routeHintEl){
+    routeHintEl.textContent = `1회 계산 한도(25곳)에 도달하여 ${skipped}곳은 선택하지 못했습니다. 담당자별·지역별로 나누어 계산해 주세요.`;
     routeHintEl.classList.add('warn');
+  } else if (typeof resetRouteHint === 'function'){
+    resetRouteHint();
   }
 });
 document.getElementById('route-reset').addEventListener('click', ()=>{
@@ -2280,13 +2293,22 @@ function matches(s, f){
 function renderList(){
   const f = currentFilters();
   const filtered = SITES.filter(s=>matches(s,f));
-  lastFiltered = filtered;
-  siteCountEl.textContent = `${filtered.length} / ${SITES.length}개 현장 표시 중`;
-  if (handleCountEl) handleCountEl.textContent = `(${filtered.length})`;
+  lastFiltered = filtered;   // '목록 전체 선택'·통계는 순수 필터 결과만 사용한다
+  // 순회경로 계획 중에는 원청사·담당자 필터를 바꿔도 이미 선택해 둔 현장이
+  // 목록·지도에서 사라지지 않도록 필터 밖의 선택 현장을 함께 표시한다.
+  const inFilter = new Set(filtered.map(s=>s.site));
+  const kept = (routeMode && routeSel.size)
+    ? SITES.filter(s=> routeSel.has(s.site) && !inFilter.has(s.site))
+    : [];
+  const shown = kept.length ? filtered.concat(kept) : filtered;
+  siteCountEl.textContent = kept.length
+    ? `${filtered.length} / ${SITES.length}개 현장 표시 중 · 선택 유지 ${kept.length}곳`
+    : `${filtered.length} / ${SITES.length}개 현장 표시 중`;
+  if (handleCountEl) handleCountEl.textContent = `(${shown.length})`;
 
   siteListEl.innerHTML = '';
   const frag = document.createDocumentFragment();
-  filtered
+  shown
     .slice()
     .sort((a,b)=>a.site.localeCompare(b.site,'ko'))
     .forEach(s=>{
@@ -2323,7 +2345,8 @@ function renderList(){
   siteListEl.appendChild(frag);
 
   // show/hide markers on the map to match the filtered set
-  const visibleSet = new Set(filtered.map(s=>s.site));
+  // (순회모드에서 선택해 둔 현장은 필터 밖이어도 지도에 계속 표시한다)
+  const visibleSet = new Set(shown.map(s=>s.site));
   markersBySite.forEach((m, siteName)=>{
     m.marker.setMap(visibleSet.has(siteName) ? map : null);
   });
