@@ -271,6 +271,32 @@
     -webkit-tap-highlight-color:transparent;
   }
   #route-plan-bar .pb-item:last-child{border-bottom:none;}
+  /* 방문 순서 수동 조정 — 행 우측의 위/아래 버튼 */
+  #route-plan-bar .pb-move{display:flex;flex-direction:column;gap:2px;flex:none;margin-left:auto;}
+  #route-plan-bar .pb-move button{
+    width:22px;height:16px;line-height:14px;padding:0;
+    border:1px solid var(--border);border-radius:4px;
+    background:var(--surface);color:var(--ink-secondary);
+    font-size:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  }
+  #route-plan-bar .pb-move button:hover:not(:disabled){background:var(--surface-alt);}
+  #route-plan-bar .pb-move button:disabled{opacity:0.3;cursor:default;}
+  .rt-drag{opacity:0.45;}
+  .rt-drop{box-shadow:inset 0 2px 0 #C00000;}
+  /* 순서 변경 중에는 중복 조작을 막는다 */
+  body.rt-busy #route-plan-bar .pb-move button,
+  body.rt-busy .rt-move button{pointer-events:none;opacity:0.35;}
+  /* 상세 결과창의 순서 조정 버튼 */
+  .route-table .rt-move{display:flex;gap:3px;margin-top:4px;}
+  .route-table .rt-move button{
+    width:22px;height:18px;line-height:16px;padding:0;
+    border:1px solid var(--border);border-radius:4px;
+    background:var(--surface);color:var(--ink-secondary);
+    font-size:9px;cursor:pointer;
+  }
+  .route-table .rt-move button:hover:not(:disabled){background:var(--surface-alt);}
+  .route-table .rt-move button:disabled{opacity:0.3;cursor:default;}
+  .route-table tr[data-move="1"]{cursor:grab;}
   #route-plan-bar .pb-item:hover{background:var(--surface-alt);}
   #route-plan-bar .pb-ord{
     flex:none;width:18px;height:18px;line-height:17px;text-align:center;
@@ -1525,7 +1551,9 @@ function renderRoutePlanBar(){
   const tag = [r.hasStart ? '출발지' : '', r.hasGoal ? '도착지' : ''].filter(Boolean).join('·');
   routePlanTitleEl.innerHTML = `순회경로 ${nSite}곳${tag ? ` (${tag} 지정)` : ''}`
     + `<small>총 ${fmtKm(r.totalKm)} · ${fmtMin(r.totalMin)}`
-    + `${r.real ? '' : ' (추정치)'}</small>`;
+    + `${r.real ? '' : ' (추정치)'}${r.manual ? ' · 순서 수동 조정' : ''}</small>`;
+
+  const mvRange = routeMoveRange(r);
 
   let cum = 0;
   routePlanListEl.innerHTML = r.sites.map((s, i)=>{
@@ -1535,12 +1563,28 @@ function renderRoutePlanBar(){
     const sub = leg
       ? `${base} · 이동 ${fmtMin(leg.min)} · 누적 ${fmtMin(cum)}`
       : (s.isStart ? escHtml(s.addr || '출발 지점') : `${escHtml(s.client)} · 출발지`);
+    const movable = !s.isStart && !s.isGoal;
+    const mv = movable
+      ? `<span class="pb-move">`
+        + `<button type="button" class="pb-up" data-i="${i}"${i <= mvRange.lo ? ' disabled' : ''} aria-label="위로">▲</button>`
+        + `<button type="button" class="pb-down" data-i="${i}"${i >= mvRange.hi ? ' disabled' : ''} aria-label="아래로">▼</button>`
+        + `</span>`
+      : '';
     return `<div class="pb-item" data-site="${escHtml(s.site)}"`
-      + ` data-lat="${s.jlat}" data-lon="${s.jlon}">`
+      + ` data-lat="${s.jlat}" data-lon="${s.jlon}" data-i="${i}" data-move="${movable?1:0}">`
       + `<span class="pb-ord${s.isStart?' is-start':''}${s.isGoal?' is-goal':''}">${routeOrdLabel(r, i)}</span>`
       + `<span class="pb-txt"><span class="pb-name">${escHtml(s.site)}</span>`
-      + `<span class="pb-sub">${sub}</span></span></div>`;
+      + `<span class="pb-sub">${sub}</span></span>${mv}</div>`;
   }).join('');
+
+  // 방문 순서 조정 — ▲▼ 버튼과 드래그
+  routePlanListEl.querySelectorAll('.pb-up').forEach(b=>{
+    b.addEventListener('click', (e)=>{ e.stopPropagation(); const i = parseInt(b.dataset.i,10); moveRouteSite(i, i-1); });
+  });
+  routePlanListEl.querySelectorAll('.pb-down').forEach(b=>{
+    b.addEventListener('click', (e)=>{ e.stopPropagation(); const i = parseInt(b.dataset.i,10); moveRouteSite(i, i+1); });
+  });
+  bindRouteDnd(routePlanListEl, '.pb-item');
 
   // 항목을 누르면 해당 현장으로 지도를 이동한다.
   routePlanListEl.querySelectorAll('.pb-item').forEach(el=>{
@@ -1616,6 +1660,137 @@ function showRouteStartMarker(){
       }
     });
   } catch(e){}
+}
+
+// ---- 구간 조회 캐시 ----
+// 방문 순서를 손으로 바꾸면 앞뒤 구간만 달라진다. 이미 조회한 구간을 기억해 두고
+// 새로 생긴 구간만 추가로 조회한다(전체 재조회 26건 → 이동 1회당 1~3건).
+const legCache = new Map();
+function legKey(a, b){
+  return `${a.lat.toFixed(6)},${a.lon.toFixed(6)}>${b.lat.toFixed(6)},${b.lon.toFixed(6)}`;
+}
+// 구간마다 독립적으로 시도한다 — 특정 구간(예: 두 지점이 지나치게 가까워
+// '출발지와 도착지가 동일합니다' 등 API가 거부하는 경우) 실패가 다른 구간까지
+// 통째로 추정치로 되돌리지 않도록 한다. 실패·추정치는 캐시에 남기지 않는다.
+async function fetchLegsFor(pts){
+  const proxy = routeProxyUrl();
+  const legs = [];
+  let failCount = 0, lastErr = '';
+  for (let i=0;i<pts.length-1;i++){
+    const key = legKey(pts[i], pts[i+1]);
+    let leg = legCache.get(key);
+    if (!leg){
+      const straight = haversineKm(pts[i], pts[i+1]);
+      if (proxy){
+        try {
+          leg = await fetchLegByProxy(proxy, pts[i], pts[i+1]);
+          leg.straight = straight;
+          legCache.set(key, leg);
+        } catch(e){
+          failCount++;
+          lastErr = (e && e.message) ? e.message : '원인 미상';
+          leg = null;
+        }
+      }
+      if (!leg){
+        const est = estimateLeg(straight);
+        leg = { km: est.km, min: est.min, straight: straight, path: null,
+                tollFare: 0, fuelPrice: 0, est: true };
+      }
+    }
+    legs.push(leg);
+  }
+  return { legs, failCount, lastErr, proxy };
+}
+// 구간 목록으로 합계·표시기준을 다시 만든다(최초 계산·순서 변경 공용).
+function buildRouteResult(base, sites, legs, failCount, lastErr, proxy){
+  const realCount = legs.filter(l => !l.est).length;
+  const real = !!proxy && realCount > 0;
+  let warn = '';
+  if (proxy && failCount > 0){
+    warn = (realCount === 0)
+      ? `중계 서버 호출에 실패해 직선거리 추정치로 표시합니다. (${lastErr})`
+      : `${failCount}개 구간은 실도로 경로를 찾지 못해 추정치로 표시했습니다. (${lastErr})`;
+  }
+  return Object.assign({}, base, {
+    sites: sites,
+    legs: legs,
+    real: real,
+    partial: real && (legs.length - realCount) > 0,
+    warn: warn,
+    totalKm: legs.reduce((a,l)=>a+l.km, 0),
+    totalMin: legs.reduce((a,l)=>a+l.min, 0),
+    tollFare: legs.reduce((a,l)=>a+(l.tollFare||0), 0),
+    fuelPrice: legs.reduce((a,l)=>a+(l.fuelPrice||0), 0)
+  });
+}
+
+// ---- 방문 순서 수동 조정 ----
+// 출발지(S)·도착지(E)는 양 끝에 고정되며, 현장은 그 사이에서만 이동한다.
+let routeBusy = false;
+function setRouteBusy(on){
+  routeBusy = on;
+  document.body.classList.toggle('rt-busy', on);
+}
+function routeMoveRange(r){
+  return { lo: r.hasStart ? 1 : 0, hi: r.sites.length - 1 - (r.hasGoal ? 1 : 0) };
+}
+async function applyRouteOrder(sites, manual){
+  setRouteBusy(true);
+  try {
+    const pts = sites.map(siteLatLon);
+    const { legs, failCount, lastErr, proxy } = await fetchLegsFor(pts);
+    routeResult = buildRouteResult(
+      Object.assign({}, routeResult, { manual: manual }),
+      sites, legs, failCount, lastErr, proxy);
+    drawRouteOnMap(routeResult);
+    renderRoutePlanBar();
+    fitRouteBounds(routeResult);
+    if (routeModalEl && !routeModalEl.classList.contains('hidden')) openRouteModal();
+  } finally {
+    setRouteBusy(false);
+  }
+}
+async function moveRouteSite(from, to){
+  const r = routeResult;
+  if (!r || routeBusy) return;
+  const { lo, hi } = routeMoveRange(r);
+  if (from < lo || from > hi || to < lo || to > hi || from === to) return;
+  const sites = r.sites.slice();
+  const [item] = sites.splice(from, 1);
+  sites.splice(to, 0, item);
+  await applyRouteOrder(sites, true);
+}
+async function restoreAutoOrder(){
+  const r = routeResult;
+  if (!r || !r.autoSites || routeBusy) return;
+  await applyRouteOrder(r.autoSites.slice(), false);
+}
+// 행을 끌어서 옮기기(PC). 휴대폰에서는 ▲▼ 버튼을 사용한다.
+function bindRouteDnd(container, selector){
+  let from = -1;
+  container.querySelectorAll(selector).forEach(el=>{
+    if (el.dataset.move !== '1') return;
+    el.setAttribute('draggable', 'true');
+    el.addEventListener('dragstart', (e)=>{
+      from = parseInt(el.dataset.i, 10);
+      el.classList.add('rt-drag');
+      try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(from)); } catch(err){}
+    });
+    el.addEventListener('dragend', ()=>{
+      el.classList.remove('rt-drag');
+      container.querySelectorAll('.rt-drop').forEach(x=>x.classList.remove('rt-drop'));
+    });
+    el.addEventListener('dragover', (e)=>{ if (from < 0) return; e.preventDefault(); el.classList.add('rt-drop'); });
+    el.addEventListener('dragleave', ()=>{ el.classList.remove('rt-drop'); });
+    el.addEventListener('drop', (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      el.classList.remove('rt-drop');
+      const to = parseInt(el.dataset.i, 10);
+      const f = from; from = -1;
+      if (f >= 0) moveRouteSite(f, to);
+    });
+  });
 }
 
 // ---- 도착지(사용자 입력 주소) ----
@@ -1698,56 +1873,11 @@ async function calcRoute(){
     const ordered = order.map(i => nodes[i]);
     const oPts = order.map(i => pts[i]);
 
-    const proxy = routeProxyUrl();
-    const legs = [];
-    let failCount = 0, lastErr = '';
-
-    // 구간마다 독립적으로 시도한다 — 특정 구간(예: 두 현장이 지나치게 가까워
-    // '출발지와 도착지가 동일합니다' 등 API가 거부하는 경우) 실패가 다른
-    // 구간까지 통째로 추정치로 되돌리지 않도록 한다.
-    for (let i=0;i<oPts.length-1;i++){
-      const straight = haversineKm(oPts[i], oPts[i+1]);
-      let leg = null;
-      if (proxy){
-        try {
-          leg = await fetchLegByProxy(proxy, oPts[i], oPts[i+1]);
-          leg.straight = straight;
-        } catch(e){
-          failCount++;
-          lastErr = (e && e.message) ? e.message : '원인 미상';
-          leg = null;
-        }
-      }
-      if (!leg){
-        const est = estimateLeg(straight);
-        leg = { km: est.km, min: est.min, straight: straight, path: null, tollFare: 0, fuelPrice: 0 };
-      }
-      legs.push(leg);
-    }
-
-    const totalLegs = legs.length;
-    const realCount = totalLegs - failCount;
-    const real = !!proxy && realCount > 0;
-    let warn = '';
-    if (proxy && failCount > 0){
-      warn = (realCount === 0)
-        ? `중계 서버 호출에 실패해 직선거리 추정치로 표시합니다. (${lastErr})`
-        : `${failCount}개 구간은 실도로 경로를 찾지 못해 추정치로 표시했습니다. (${lastErr})`;
-    }
-
-    routeResult = {
-      sites: ordered,
-      hasStart: !!startSite,
-      hasGoal: !!goalSite,
-      legs: legs,
-      real: real,
-      partial: real && failCount > 0,
-      warn: warn,
-      totalKm: legs.reduce((a,l)=>a+l.km, 0),
-      totalMin: legs.reduce((a,l)=>a+l.min, 0),
-      tollFare: legs.reduce((a,l)=>a+(l.tollFare||0), 0),
-      fuelPrice: legs.reduce((a,l)=>a+(l.fuelPrice||0), 0)
-    };
+    const { legs, failCount, lastErr, proxy } = await fetchLegsFor(oPts);
+    // autoSites: 최적화가 산출한 원래 순서 — [최단순서 복원]에 사용한다.
+    routeResult = buildRouteResult(
+      { hasStart: !!startSite, hasGoal: !!goalSite, manual: false, autoSites: ordered.slice() },
+      ordered, legs, failCount, lastErr, proxy);
     drawRouteOnMap(routeResult);
     renderRoutePlanBar();   // 결과창을 닫아도 방문순서·현장명이 지도 위에 남도록
     fitRouteBounds(routeResult);  // 결과바 높이를 반영해 여백을 잡으려면 그 뒤에 호출
@@ -1800,6 +1930,7 @@ function openRouteModal(){
         : `<div class="route-note ok">네이버 Directions 실시간 교통 기준 실제 도로 경로입니다. 방문 순서는 직선거리 기준으로 최적화한 뒤 구간별 실도로 소요시간을 조회했습니다.</div>`)
     : `<div class="route-note">${r.warn ? r.warn + '<br/>' : ''}<b>추정치 표시 중</b> — 직선거리에 도로 우회계수 1.3배와 구간별 평균속도(시내 25 · 근교 45 · 시외 65km/h)를 적용한 값입니다. 실제 도로·교통 기준 값을 보려면 아래에 중계 서버 주소를 등록해 주세요.</div>`;
 
+  const mvRange = routeMoveRange(r);
   let cum = 0;
   const rows = r.sites.map((s, i)=>{
     const leg = i > 0 ? r.legs[i-1] : null;
@@ -1807,8 +1938,15 @@ function openRouteModal(){
     const tot = CATS.reduce((a,c)=>a+(s[c.key]||0),0);
     const meta = s.isStart ? '경로 시작 지점'
                : (s.isGoal ? '경로 종료 지점' : `${s.client} · ${s.manager} · ${tot}명`);
-    return `<tr>
-      <td><span class="ord">${routeOrdLabel(r, i)}</span></td>
+    const movable = !s.isStart && !s.isGoal;
+    const mv = movable
+      ? `<div class="rt-move">`
+        + `<button type="button" class="rt-up" data-i="${i}"${i <= mvRange.lo ? ' disabled' : ''} aria-label="위로">▲</button>`
+        + `<button type="button" class="rt-down" data-i="${i}"${i >= mvRange.hi ? ' disabled' : ''} aria-label="아래로">▼</button>`
+        + `</div>`
+      : '';
+    return `<tr data-i="${i}" data-move="${movable?1:0}">
+      <td><span class="ord">${routeOrdLabel(r, i)}</span>${mv}</td>
       <td><div>${escHtml(s.site)}</div><div class="sub">${escHtml(meta)}</div><div class="sub">${escHtml(s.addr || '주소 정보 없음')}</div></td>
       <td class="num">${leg ? fmtKm(leg.km) : '-'}</td>
       <td class="num">${leg ? fmtMin(leg.min) : '출발'}</td>
@@ -1819,8 +1957,14 @@ function openRouteModal(){
   const fare = (r.tollFare || r.fuelPrice)
     ? `<div class="rs-tile"><div class="num">${Math.round(r.tollFare + r.fuelPrice).toLocaleString()}원</div><div class="lbl">통행료 + 유류비</div></div>` : '';
 
+  const manualNote = r.manual
+    ? `<div class="route-note">방문 순서를 <b>수동으로 조정</b>한 경로입니다. 최단 순서가 아닐 수 있습니다.`
+      + ` <button type="button" class="btn" id="route-restore-auto" style="margin-left:6px;padding:3px 9px;font-size:11px;">최단순서 복원</button></div>`
+    : '';
+
   routeModalBodyEl.innerHTML = `
     ${note}
+    ${manualNote}
     <div class="route-summary">
       <div class="rs-tile"><div class="num">${realSites.length}</div><div class="lbl">방문 현장(곳)</div></div>
       <div class="rs-tile"><div class="num">${fmtKm(r.totalKm)}</div><div class="lbl">총 이동거리</div></div>
@@ -1843,6 +1987,7 @@ function openRouteModal(){
       </div>
     </div>`;
 
+  bindRouteModalOrderUi();
   document.getElementById('route-export').addEventListener('click', exportRouteExcel);
   document.getElementById('route-close-btn').addEventListener('click', closeRouteModal);
   document.getElementById('route-proxy-save').addEventListener('click', ()=>{
@@ -1852,6 +1997,21 @@ function openRouteModal(){
   });
   routeModalEl.classList.remove('hidden');
 }
+// 상세 결과창의 순서 조정 버튼·드래그·복원 버튼을 연결한다.
+function bindRouteModalOrderUi(){
+  if (!routeModalBodyEl) return;
+  routeModalBodyEl.querySelectorAll('.rt-up').forEach(b=>{
+    b.addEventListener('click', (e)=>{ e.stopPropagation(); const i = parseInt(b.dataset.i,10); moveRouteSite(i, i-1); });
+  });
+  routeModalBodyEl.querySelectorAll('.rt-down').forEach(b=>{
+    b.addEventListener('click', (e)=>{ e.stopPropagation(); const i = parseInt(b.dataset.i,10); moveRouteSite(i, i+1); });
+  });
+  const tbody = routeModalBodyEl.querySelector('.route-table tbody');
+  if (tbody) bindRouteDnd(tbody, 'tr');
+  const restoreBtn = routeModalBodyEl.querySelector('#route-restore-auto');
+  if (restoreBtn) restoreBtn.addEventListener('click', restoreAutoOrder);
+}
+
 function closeRouteModal(){ routeModalEl.classList.add('hidden'); }
 if (routeModalCloseEl){
   routeModalCloseEl.addEventListener('click', closeRouteModal);
@@ -1872,7 +2032,7 @@ function exportRouteExcel(){
   const lines = [];
   lines.push(['대덕휴비즈 현장 순회점검 계획']);
   lines.push(['작성일', today]);
-  lines.push(['산출기준', basis]);
+  lines.push(['산출기준', basis + (r.manual ? ' · 방문 순서 수동 조정' : '')]);
   lines.push(['방문 현장 수', r.sites.filter(s=>!s.isStart && !s.isGoal).length + '곳']);
   if (r.hasStart) lines.push(['출발지', r.sites[0].addr || '']);
   if (r.hasGoal) lines.push(['도착지', r.sites[r.sites.length-1].addr || '']);
