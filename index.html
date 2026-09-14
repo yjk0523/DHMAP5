@@ -670,6 +670,12 @@
     #filter-group{display:flex;flex-direction:column;gap:10px;}
     #filter-group.collapsed{display:none;}
 
+    /* [2026-09-14] 순회경로 계획 여부와 무관하게 검색·필터가 항상 보이도록,
+       상단 컨트롤(손잡이·검색·필터·순회경로 버튼)은 눌려 찌그러지지 않게 고정하고
+       남은 공간은 모두 현장 목록에 준다. */
+    #sidebar > *{flex:none;}
+    #site-list{flex:1 1 auto;min-height:140px;-webkit-overflow-scrolling:touch;}
+
     /* 순회 선택 현황 · 경로 계산을 목록 아래에 고정 노출(스크롤해도 항상 보임) */
     #route-bottom-bar{
       flex:none;
@@ -919,7 +925,7 @@
     </div>
   </div>
   <footer>
-    <span>자료: 대덕휴비즈 현장관리 마스터(2026-08) · 좌표는 네이버 지오코딩 결과 및 시/군/구 행정구역 중심 좌표로 표기됨 · 비고에 [삭제후보] 표기된 현장 및 6대 직종 인원이 모두 0인 현장은 제외</span>
+    <span>자료: 현장 목록 — 대덕휴비즈 현장관리 마스터(2026-08) / 근로자 명단 · 직종별 인원 — 사업장가입자명부(2026-08) · 좌표는 네이버 지오코딩 결과 및 시/군/구 행정구역 중심 좌표로 표기됨 · 비고에 [삭제후보] 표기된 현장 및 6대 직종 인원이 모두 0인 현장은 제외</span>
     <span id="gen-date"></span>
   </footer>
   <div id="site-info-modal" class="modal-overlay hidden">
@@ -1916,11 +1922,10 @@ function setRouteMode(on){
     document.body.classList.remove('rt-labels-off');
   }
   if (isMobileLayout()){
-    // 모바일: 순회 선택을 시작하면 시트를 자동으로 펼치고(전체화면 목록),
-    // 검색·필터는 접어 목록 공간을 최대로 확보한다. 종료 시 원래대로 되돌린다.
+    // 모바일: 순회 선택을 시작하면 시트를 자동으로 펼친다(전체화면 목록).
+    // [2026-09-14] 검색·필터는 순회경로 계획과 무관하게 항상 쓸 수 있어야 하므로
+    //              진입·종료 시 접기/펼치기 상태를 건드리지 않는다.
     if (sidebarEl) sidebarEl.classList.toggle('expanded', on);
-    if (filterGroupEl) filterGroupEl.classList.toggle('collapsed', on);
-    if (filterToggleEl) filterToggleEl.classList.remove('open');
     // 순회 설정은 기본으로 접어 현장 목록이 최대한 많이 보이게 한다.
     if (typeof setRouteToolsOpen === 'function'){
       setRouteToolsOpen(!on);
@@ -2014,11 +2019,11 @@ if (filterToggleEl && filterGroupEl){
     filterGroupEl.classList.toggle('collapsed');
     filterToggleEl.classList.toggle('open');
   });
-  // 모바일은 화면이 좁아 검색·필터가 펼쳐져 있으면 현장 목록이 거의 보이지 않는다.
-  // 처음에는 접어두고, [검색·필터]를 눌러 펼치도록 한다.
+  // [2026-09-14] 모바일에서도 검색·필터를 처음부터 펼쳐 둔다.
+  // 목록 공간이 필요하면 [검색·필터]를 눌러 직접 접을 수 있다.
   if (isMobileLayout()){
-    filterGroupEl.classList.add('collapsed');
-    filterToggleEl.classList.remove('open');
+    filterGroupEl.classList.remove('collapsed');
+    filterToggleEl.classList.add('open');
   }
 }
 // 모바일: 시트를 접어 지도가 보일 때, 지도 위 플로팅바의 [목록 열기]로
